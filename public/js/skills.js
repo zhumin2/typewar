@@ -109,14 +109,30 @@ export function applyReceivedEffect(b, eff) {
 function fxSkill(b, side, sk, eff) {
   const me = side === 'me' ? 'me' : 'foe';
   const foe = me === 'me' ? 'foe' : 'me';
-  const from = posOf(b.ui.portrait[me]);
-  const to = posOf(b.ui.portrait[foe]);
+  // 优先锚定中央舞台上的角色，退化时才用状态栏头像
+  const elMe = (b.ui.fighter && b.ui.fighter[me]) || b.ui.portrait[me];
+  const elFoe = (b.ui.fighter && b.ui.fighter[foe]) || b.ui.portrait[foe];
+  const from = posOf(elMe);
+  const to = posOf(elFoe);
 
-  floatAtEl(b.ui.portrait[me], `${sk.icon} ${sk.name}`, 'f-skill');
+  // 施法者：举身 + 光环爆开
+  if (b.animateFighter) b.animateFighter(me, 'casting', 720);
+
+  floatAtEl(elMe, `${sk.icon} ${sk.name}`, 'f-skill');
 
   const hasFoeTarget = eff.dmg || eff.multi || eff.slow || eff.silence || eff.steal || eff.dot;
   if (hasFoeTarget) {
-    projectile(from.x, from.y, to.x, to.y, { color: sk.color, dur: 0.4, size: 7 });
+    // 稍等一拍，让施法动作先出来
+    setTimeout(() => {
+      if (b.over) return;
+      projectile(from.x, from.y, to.x, to.y, {
+        color: sk.color, dur: 0.42, size: 10, arc: 26,
+        onHit: () => {
+          if (b.animateFighter) b.animateFighter(foe, 'hurt', 380);
+          if (b.clashFlash) b.clashFlash();
+        },
+      });
+    }, 140);
   }
   if (eff.chaos) {
     const laneR = b.ui.laneEl[foe].getBoundingClientRect();
@@ -125,11 +141,11 @@ function fxSkill(b, side, sk, eff) {
     burst(cx - cv.left, cy - cv.top, { color: sk.color, count: 40, speed: 220, size: 3, life: 0.9 });
     floatAtEl(b.ui.laneEl[foe], '🌀 词流被污染！', 'f-debuff');
   }
-  if (eff.slow) floatAtEl(b.ui.portrait[foe], '❄️ 词流减速！', 'f-debuff');
-  if (eff.silence) floatAtEl(b.ui.portrait[foe], '🔇 沉默！', 'f-debuff');
-  if (eff.dot) floatAtEl(b.ui.portrait[foe], eff.dot.kind === 'poison' ? '☠️ 中毒！' : '🌑 暗蚀！', 'f-debuff');
-  if (eff.steal) floatAtEl(b.ui.portrait[me], `🔮 窃取 ${eff.steal} MP`, 'f-mp');
-  if (eff.buff) floatAtEl(b.ui.portrait[me], eff.buff.kind === 'dmg' ? '💥 伤害提升！' : '⚡ 资源加速！', 'f-buff');
-  if (eff.shield) { burst(from.x, from.y, { color: '#4dd8ff', count: 26, speed: 150, size: 3, life: 0.7 }); floatAtEl(b.ui.portrait[me], `🛡️ 护盾 +${eff.shield.n}`, 'f-shield'); }
-  if (eff.heal) floatAtEl(b.ui.portrait[me], `+${eff.heal}`, 'f-heal');
+  if (eff.slow) floatAtEl(elFoe, '❄️ 词流减速！', 'f-debuff');
+  if (eff.silence) floatAtEl(elFoe, '🔇 沉默！', 'f-debuff');
+  if (eff.dot) floatAtEl(elFoe, eff.dot.kind === 'poison' ? '☠️ 中毒！' : '🌑 暗蚀！', 'f-debuff');
+  if (eff.steal) floatAtEl(elMe, `🔮 窃取 ${eff.steal} MP`, 'f-mp');
+  if (eff.buff) floatAtEl(elMe, eff.buff.kind === 'dmg' ? '💥 伤害提升！' : '⚡ 资源加速！', 'f-buff');
+  if (eff.shield) { burst(from.x, from.y, { color: '#4dd8ff', count: 26, speed: 150, size: 3, life: 0.7 }); floatAtEl(elMe, `🛡️ 护盾 +${eff.shield.n}`, 'f-shield'); }
+  if (eff.heal) floatAtEl(elMe, `+${eff.heal}`, 'f-heal');
 }

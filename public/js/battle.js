@@ -16,6 +16,7 @@ function sideState(cardId) {
     ap: 30, mp: 20, maxAp: CFG.maxAp, maxMp: CFG.maxMp,
     combo: 0, maxCombo: 0,
     shield: 0, shieldUntil: 0,
+    dotAcc: 0, dotT: 0,
     buffs: { dmgUntil: 0, gainUntil: 0, dmgMult: 1, gainMult: 1, slowUntil: 0, slowMult: 1 },
     dots: [],           // {dps, left, kind}
     silencedUntil: 0,
@@ -132,8 +133,24 @@ export class Battle {
           <div class="lane foe-lane" id="lane-foe"><div class="line"></div><div class="words"></div></div>
         </section>
         <div class="mid">
-          <span class="vs-badge">VS</span>
-          <span class="timer" id="timer">00:00</span>
+          <div class="stage" id="stage">
+            <div class="stage-grid"></div>
+            <div class="stage-hud">
+              <span class="vs-badge">VS</span>
+              <span class="timer" id="timer">00:00</span>
+            </div>
+            <div class="fighter foe" id="fighter-foe" style="--pc:${this.S.foe.card.color}">
+              <div class="f-hp"><i id="fhp-foe"></i></div>
+              <div class="sprite"><span class="aura"></span><span class="icon">${this.S.foe.card.icon}</span></div>
+              <div class="ftag">${foeName}</div>
+            </div>
+            <div class="clash" id="clash"></div>
+            <div class="fighter me" id="fighter-me" style="--pc:${this.S.me.card.color}">
+              <div class="f-hp"><i id="fhp-me"></i></div>
+              <div class="sprite"><span class="aura"></span><span class="icon">${this.S.me.card.icon}</span></div>
+              <div class="ftag">${this.S.me.card.name}</div>
+            </div>
+          </div>
         </div>
         <section class="side me">
           <div class="lane me-lane" id="lane-me"><div class="line"></div><div class="words"></div></div>
@@ -176,6 +193,31 @@ export class Battle {
     this.ui.timer = $('timer');
     this.ui.countdown = $('countdown');
     this.ui.resultLayer = $('result-layer');
+    // 中央舞台
+    this.ui.stage = $('stage');
+    this.ui.fighter = { me: $('fighter-me'), foe: $('fighter-foe') };
+    this.ui.fighterHp = { me: $('fhp-me'), foe: $('fhp-foe') };
+    this.ui.clash = $('clash');
+  }
+
+  /* ============ 舞台角色动画 ============ */
+  /** 给某一方角色加一次性动画类 */
+  animateFighter(side, cls, ms = 420) {
+    const el = this.ui.fighter && this.ui.fighter[side];
+    if (!el) return;
+    el.classList.remove(cls);
+    void el.offsetWidth; // 重触发动画
+    el.classList.add(cls);
+    if (ms > 0) setTimeout(() => el.classList.remove(cls), ms);
+  }
+
+  /** 舞台中央的撞击闪光 */
+  clashFlash() {
+    const el = this.ui.clash;
+    if (!el) return;
+    el.classList.remove('pop');
+    void el.offsetWidth;
+    el.classList.add('pop');
   }
 
   bindSkillButtons() {
@@ -254,7 +296,7 @@ export class Battle {
     s.ap = Math.min(s.maxAp, s.ap + CFG.apPassive * g * dt);
     s.mp = Math.min(s.maxMp, s.mp + CFG.mpPassive * g * dt);
 
-    // DoT
+    // DoT：按 0.4 秒聚合结算，避免每帧飘字刷屏
     if (s.dots.length) {
       let sum = 0;
       s.dots = s.dots.filter(d => {
@@ -263,7 +305,16 @@ export class Battle {
         d.left -= dt;
         return d.left > 0;
       });
-      if (sum > 0) this.damage(side, sum, { src: null, dot: true });
+      s.dotAcc += sum;
+      s.dotT -= dt;
+      // 到点结算；DoT 结束时把残留尾数一次性补上，避免吞伤害
+      const expiring = s.dots.length === 0;
+      if ((s.dotT <= 0 && s.dotAcc >= 0.5) || (expiring && s.dotAcc > 0.1)) {
+        const amt = s.dotAcc;
+        s.dotAcc = 0;
+        s.dotT = 0.4;
+        this.damage(side, amt, { src: null, dot: true });
+      }
     }
   }
 
@@ -328,12 +379,31 @@ export class Battle {
 
   showAttack(side, word, dmg) {
     const foe = side === 'me' ? 'foe' : 'me';
-    const from = posOf(word.el);
-    const to = posOf(this.ui.portrait[foe]);
     const color = word.magic ? '#b26bff' : (side === 'me' ? '#4dd8ff' : '#ff5470');
-    projectile(from.x, from.y, to.x, to.y, { color, dur: 0.42, size: 6, onHit: () => {
-      floatAtEl(this.ui.portrait[foe], `-${dmg}`, side === 'me' ? 'f-dmg' : 'f-dmg-to-me');
-    } });
+
+    // 攻击方突进 + 光环爆闪
+    this.animateFighter(side, 'attacking', 420);
+    // 略微延迟，让突进先出来再飞弹
+    setTimeout(() => {
+      if (this.over) return;
+      const from = posOf(this.ui.fighter[side]);
+      const to = posOf(this.ui.fighter[foe]);
+      // 挥砍：朝目标方向的扇形粒子
+      const dir = Math.atan2(to.y - from.y, to.x - from.x);
+      burst(from.x + Math.cos(dir) * 26, from.y + Math.sin(dir) * 26, {
+        color, count: 16, speed: 210, size: 3, life: 0.34, spread: 1.1, dir,
+      });
+      projectile(from.x, from.y, to.x, to.y, {
+        color, dur: 0.32, size: word.magic ? 10 : 8,
+        onHit: () => {
+          this.animateFighter(foe, 'hurt', 380);
+          this.clashFlash();
+          const pt = posOf(this.ui.fighter[foe]);
+          burst(pt.x, pt.y, { color, count: 20, speed: 260, size: 3.5, life: 0.5 });
+          floatAtEl(this.ui.fighter[foe], `-${dmg}`, side === 'me' ? 'f-dmg' : 'f-dmg-to-me');
+        },
+      });
+    }, 80);
   }
 
   onWordEscape(side, word) {
@@ -356,24 +426,29 @@ export class Battle {
   damage(side, amount, { src = null, predicted = false, dot = false, escape = false } = {}) {
     if (amount <= 0) return 0;
     const s = this.S[side];
-    let amt = Math.round(amount);
+    // DoT 保留小数，避免每次结算取整反复丢伤害；普通伤害取整
+    const amt = dot ? amount : Math.round(amount);
+    const target = (this.ui.fighter && this.ui.fighter[side]) || this.ui.portrait[side];
+
+    let remaining = amt;
 
     // 护盾吸收
     if (s.shield > 0) {
-      const ab = Math.min(s.shield, amt);
+      const ab = Math.min(s.shield, remaining);
       s.shield -= ab;
-      amt -= ab;
-      if (ab > 0 && !predicted) floatAtEl(this.ui.portrait[side], `🛡️ -${ab}`, 'f-shield');
+      remaining -= ab;
+      if (ab > 0 && !predicted) floatAtEl(target, `🛡️ -${Math.round(ab)}`, 'f-shield');
     }
 
-    if (amt > 0) {
-      s.hp = Math.max(0, s.hp - amt);
+    if (remaining > 0) {
+      s.hp = Math.max(0, s.hp - remaining);
       if (!predicted) {
-        floatAtEl(this.ui.portrait[side], `-${amt}`, side === 'me' ? 'f-dmg-to-me' : 'f-dmg');
-        if (dot) { sparkAt(this.ui.portrait[side], '#7ddf64'); }
+        this.animateFighter(side, 'hurt', 380);
+        floatAtEl(target, `-${Math.max(1, Math.round(remaining))}`, side === 'me' ? 'f-dmg-to-me' : 'f-dmg');
+        if (dot) sparkAt(target, '#7ddf64');
         if (side === 'me') { shake(escape ? 1.4 : 1); sfx.hit(); }
-        else if (this.mode === 'pve') sparkAt(this.ui.portrait[side], '#ff5470');
-        if (src && this.S[src]) this.S[src].stats.dmgDealt += amt;
+        else if (this.mode === 'pve') { sparkAt(target, '#ff5470'); this.clashFlash(); }
+        if (src && this.S[src]) this.S[src].stats.dmgDealt += Math.round(remaining);
       }
     }
 
@@ -387,7 +462,10 @@ export class Battle {
     const real = Math.min(s.maxHp - s.hp, Math.round(n));
     if (real > 0) {
       s.hp += real;
-      floatAtEl(this.ui.portrait[side], `+${real}`, 'f-heal');
+      const target = (this.ui.fighter && this.ui.fighter[side]) || this.ui.portrait[side];
+      floatAtEl(target, `+${real}`, 'f-heal');
+      const pt = posOf(target);
+      burst(pt.x, pt.y, { color: '#51ff9e', count: 14, speed: 90, size: 2.5, life: 0.6 });
     }
   }
 
@@ -521,6 +599,8 @@ export class Battle {
     this.over = true;
     this.phase = 'over';
     this.winner = winner;
+    // 舞台：败者倒地
+    this.animateFighter(winner === 'me' ? 'foe' : 'me', 'ko', 0);
     if (winner === 'me') sfx.win(); else sfx.lose();
     cancelAnimationFrame(this._raf);
     clearInterval(this._watchdog);
@@ -576,6 +656,9 @@ export class Battle {
       this.ui.apbar[side].style.width = pct(s.ap, s.maxAp);
       this.ui.mpbar[side].style.width = pct(s.mp, s.maxMp);
       this.ui.hpNum[side].textContent = `${Math.ceil(s.hp)} / ${s.maxHp}`;
+      if (this.ui.fighterHp && this.ui.fighterHp[side]) {
+        this.ui.fighterHp[side].style.width = pct(s.hp, s.maxHp);
+      }
     }
 
     // 计时
