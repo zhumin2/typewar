@@ -45,7 +45,7 @@ EOF
   --dir PATH        安装目录（默认 /opt/typewar）
   --repo URL        仓库地址
     --branch NAME     分支（默认 main）
-    --archive URL     用 tar.gz 压缩包安装（github 不可达时使用）
+    --archive URL     用 tar.gz 压缩包安装（可填本地路径，github 不可达时使用）
     --tls-cert FILE   证书路径（提供后启用 HTTPS/WSS）
   --tls-key FILE    私钥路径
   --skip-firewall   不修改防火墙规则
@@ -195,7 +195,10 @@ build_archive_mirrors() {
 download_archive() {
   local url="$1" tmp
   tmp="$(mktemp -t typewar.XXXXXX.tar.gz)"
-  if ! curl -fL --retry 2 --connect-timeout 15 --max-time 300 -o "$tmp" "$url" 2>/dev/null; then
+  if [[ -f "$url" ]]; then
+    # 支持直接指定本地压缩包（服务器完全无法出网时可用 scp 传上来）
+    cp -f "$url" "$tmp" || { rm -f "$tmp"; return 1; }
+  elif ! curl -fL --retry 2 --connect-timeout 15 --max-time 300 -o "$tmp" "$url" 2>/dev/null; then
     rm -f "$tmp"
     return 1
   fi
