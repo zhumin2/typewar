@@ -54,3 +54,20 @@ jobs:
           };
           ws.onerror = (e) => { console.error('连接失败', e.message); process.exit(1); };
           JS
+
+  # 模拟国内服务器：github.com 不可达，只能走镜像压缩包
+  install-from-archive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 压缩包模式安装
+        run: |
+          sudo env "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+            bash deploy/install.sh --port 3100 --skip-firewall \
+              --archive https://ghfast.top/https://github.com/zhumin2/typewar/archive/refs/heads/main.tar.gz
+
+      - name: 服务与 HTTP 检查
+        run: |
+          sudo systemctl is-active typewar
+          curl -fsS -o /dev/null -w "index %{http_code}\n" http://127.0.0.1:3100/

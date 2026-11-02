@@ -20,6 +20,7 @@ REPO="https://github.com/zhumin2/typewar.git"
 BRANCH="main"
 TLS_CERT=""
 TLS_KEY=""
+ARCHIVE_URL=""
 SKIP_FIREWALL=0
 GO_VERSION="${GO_VERSION:-1.23.4}"
 GOPROXY_DEFAULT="https://goproxy.cn,direct"
@@ -43,8 +44,9 @@ EOF
   --bind ADDR       绑定地址，如 127.0.0.1（默认监听全部网卡）
   --dir PATH        安装目录（默认 /opt/typewar）
   --repo URL        仓库地址
-  --branch NAME     分支（默认 main）
-  --tls-cert FILE   证书路径（提供后启用 HTTPS/WSS）
+    --branch NAME     分支（默认 main）
+    --archive URL     用 tar.gz 压缩包安装（github 不可达时使用）
+    --tls-cert FILE   证书路径（提供后启用 HTTPS/WSS）
   --tls-key FILE    私钥路径
   --skip-firewall   不修改防火墙规则
   -h, --help        显示帮助
@@ -63,6 +65,7 @@ while [[ $# -gt 0 ]]; do
     --dir) APP_DIR="${2:?}"; shift 2 ;;
     --repo) REPO="${2:?}"; shift 2 ;;
     --branch) BRANCH="${2:?}"; shift 2 ;;
+    --archive) ARCHIVE_URL="${2:?}"; shift 2 ;;
     --tls-cert) TLS_CERT="${2:?}"; shift 2 ;;
     --tls-key) TLS_KEY="${2:?}"; shift 2 ;;
     --skip-firewall) SKIP_FIREWALL=1; shift ;;
@@ -75,12 +78,19 @@ if [[ -n "$TLS_CERT" || -n "$TLS_KEY" ]]; then
   [[ -f "$TLS_CERT" && -f "$TLS_KEY" ]] || { echo "证书或私钥文件不存在" >&2; exit 1; }
 fi
 
-# ---------------------------------------------------------------- 输出
+# ---------------------------------------------------------------- 输出与工具函数
 C_RESET=$'\033[0m'; C_INFO=$'\033[36m'; C_OK=$'\033[32m'; C_WARN=$'\033[33m'; C_ERR=$'\033[31m'
 log()  { printf '%s==>%s %s\n' "$C_INFO" "$C_RESET" "$*"; }
 ok()   { printf '%s  ✓%s %s\n' "$C_OK" "$C_RESET" "$*"; }
 warn() { printf '%s  !%s %s\n' "$C_WARN" "$C_RESET" "$*"; }
 die()  { printf '%s  ✗%s %s\n' "$C_ERR" "$C_RESET" "$*" >&2; exit 1; }
+
+# 安装目录规范化 + 安全检查（后续会 rm -rf 该目录）
+APP_DIR="${APP_DIR%/}"
+[[ -n "$APP_DIR" ]] || die "安装目录不能为空"
+case "$APP_DIR" in
+  /|/opt|/usr|/etc|/home|/root|/var) die "安装目录不合法: ${APP_DIR}" ;;
+esac
 
 # ---------------------------------------------------------------- 前置检查
 [[ "$(id -u)" -eq 0 ]] || die "请用 root 或 sudo 运行"
@@ -161,16 +171,92 @@ export GOPROXY="${GOPROXY:-$GOPROXY_DEFAULT}"
 export CGO_ENABLED=0
 
 # ---------------------------------------------------------------- 代码
-if [[ -d "$APP_DIR/.git" ]]; then
+# 国内服务器常访问不了 github.com / raw.githubusercontent.com，这里做多路回退：
+#   1) 指定了 --archive：直接用该压缩包地址
+#   2) 已有 git 仓库：git fetch 更新
+#   3) git clone
+#   4) 以上失败：依次尝试 GitHub 加速镜像下载 tar.gz
+ARCHIVE_MIRRORS=()
+build_archive_mirrors() {
+  local owner repo path
+  owner="$(printf '%s' "$REPO" | sed -n 's#.*github\.com[:/]\([^/]*\)/\([^/]*\)\.git.*#\1#p')"
+  repo="$(printf '%s' "$REPO" | sed -n 's#.*github\.com[:/]\([^/]*\)/\([^/]*\)\.git.*#\2#p')"
+  [[ -n "$owner" && -n "$repo" ]] || return 0
+  path="${owner}/${repo}/archive/refs/heads/${BRANCH}.tar.gz"
+  ARCHIVE_MIRRORS=(
+    "https://ghfast.top/https://github.com/${path}"
+    "https://gh-proxy.com/https://github.com/${path}"
+    "https://ghproxy.net/https://github.com/${path}"
+    "https://codeload.github.com/${path}"
+    "https://github.com/${path}"
+  )
+}
+
+download_archive() {
+  local url="$1" tmp
+  tmp="$(mktemp -t typewar.XXXXXX.tar.gz)"
+  if ! curl -fL --retry 2 --connect-timeout 15 --max-time 300 -o "$tmp" "$url" 2>/dev/null; then
+    rm -f "$tmp"
+    return 1
+  fi
+  rm -rf "$APP_DIR"
+  mkdir -p "$APP_DIR"
+  if ! tar -xzf "$tmp" -C "$APP_DIR" --strip-components=1 2>/dev/null; then
+    rm -f "$tmp"
+    rm -rf "$APP_DIR"
+    return 1
+  fi
+  rm -f "$tmp"
+  return 0
+}
+
+CODE_VERSION=""
+build_archive_mirrors
+
+if [[ -n "$ARCHIVE_URL" ]]; then
+  log "从指定压缩包安装: ${ARCHIVE_URL}"
+  download_archive "$ARCHIVE_URL" || die "压缩包下载或解压失败: ${ARCHIVE_URL}"
+  CODE_VERSION="archive"
+elif [[ -d "$APP_DIR/.git" ]]; then
   log "更新代码: ${APP_DIR} (${BRANCH})"
-  git -C "$APP_DIR" fetch --depth 1 origin "$BRANCH" >/dev/null
-  git -C "$APP_DIR" reset --hard "origin/${BRANCH}" >/dev/null
+  if git -C "$APP_DIR" fetch --depth 1 origin "$BRANCH" >/dev/null 2>&1; then
+    git -C "$APP_DIR" reset --hard "origin/${BRANCH}" >/dev/null
+    CODE_VERSION="$(git -C "$APP_DIR" rev-parse --short HEAD)"
+  else
+    warn "git fetch 失败，改用镜像压缩包"
+    for u in "${ARCHIVE_MIRRORS[@]}"; do
+      if download_archive "$u"; then CODE_VERSION="archive"; break; fi
+    done
+    [[ -n "$CODE_VERSION" ]] || die "代码更新失败：git 与镜像均不可用，可用 --archive 指定可访问的压缩包地址"
+  fi
+elif [[ -d "$APP_DIR" && ! -d "$APP_DIR/.git" ]]; then
+  # 上次是用压缩包安装的：直接重新下载
+  log "重新下载代码到 ${APP_DIR}（压缩包模式）"
+  for u in "${ARCHIVE_MIRRORS[@]}"; do
+    log "  尝试: ${u}"
+    if download_archive "$u"; then CODE_VERSION="archive"; break; fi
+  done
+  [[ -n "$CODE_VERSION" ]] || die "代码更新失败：可用 --archive <tar.gz 地址> 指定可访问的地址"
 else
-  log "克隆仓库到 ${APP_DIR}"
   mkdir -p "$(dirname "$APP_DIR")"
-  git clone --depth 1 --branch "$BRANCH" "$REPO" "$APP_DIR" >/dev/null
+  if git clone --depth 1 --branch "$BRANCH" "$REPO" "$APP_DIR" >/dev/null 2>&1; then
+    CODE_VERSION="$(git -C "$APP_DIR" rev-parse --short HEAD)"
+  else
+    warn "git clone 失败（国内网络常见），尝试镜像下载压缩包"
+    rm -rf "$APP_DIR"
+    for u in "${ARCHIVE_MIRRORS[@]}"; do
+      log "  尝试: ${u}"
+      if download_archive "$u"; then CODE_VERSION="archive"; break; fi
+    done
+    [[ -n "$CODE_VERSION" ]] || die "代码获取失败：可用 --archive <tar.gz 地址> 或 --repo <镜像仓库地址> 重试"
+  fi
 fi
-ok "代码版本: $(git -C "$APP_DIR" rev-parse --short HEAD)"
+
+if [[ "$CODE_VERSION" == "archive" ]]; then
+  ok "代码版本: 压缩包（无 git 历史）"
+else
+  ok "代码版本: ${CODE_VERSION}"
+fi
 
 # ---------------------------------------------------------------- 编译
 log "编译服务端（GOPROXY=${GOPROXY}）"

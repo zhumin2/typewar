@@ -118,6 +118,18 @@ curl -fsSL -o install.sh https://raw.githubusercontent.com/zhumin2/typewar/main/
 sudo bash install.sh
 ```
 
+> **国内服务器**：`raw.githubusercontent.com` 常被阻断，改用镜像下载脚本：
+>
+> ```bash
+> curl -fsSL -o install.sh https://cdn.jsdelivr.net/gh/zhumin2/typewar@main/deploy/install.sh
+> # 备选：https://ghfast.top/https://raw.githubusercontent.com/zhumin2/typewar/main/deploy/install.sh
+> sudo bash install.sh
+> ```
+>
+> 脚本内部也会自动处理网络问题：`git clone github.com` 失败时依次尝试
+> `ghfast.top` / `gh-proxy.com` / `ghproxy.net` / `codeload` 镜像下载 tar.gz。
+> 也可手动指定：`--archive <tar.gz地址>` 或 `--repo <镜像仓库地址>`。
+
 常用参数：
 
 ```bash
