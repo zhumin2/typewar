@@ -108,16 +108,44 @@ Dockerfile          # 多阶段构建镜像
 已配置 `.github/workflows/deploy-pages.yml`，推送 `main` 即自动发布 `public/`。
 线上地址形如 `https://<用户名>.github.io/typewar/`（PVE 直接可玩）。
 
-### 2. 联机服务器 → 任意 VPS
+### 2. 联机服务器 → 任意 VPS（推荐一键脚本）
 
-**方式 A：单二进制**
+在阿里云 ECS / 腾讯云 / 任意 Linux 上（Alibaba Cloud Linux、CentOS、Ubuntu、Debian 均可）：
 
 ```bash
-./scripts/build.sh linux          # 产出 bin/typewar-linux-amd64、arm64
-scp bin/typewar-linux-amd64 user@vps:/opt/typewar
-scp -r public user@vps:/opt/typewar/
-ssh user@vps '/opt/typewar -addr :3000 -dir /opt/typewar/public'
+# 下载脚本后执行（脚本会自动装 Go、编译、配 systemd、放行防火墙）
+curl -fsSL -o install.sh https://raw.githubusercontent.com/zhumin2/typewar/main/deploy/install.sh
+sudo bash install.sh
 ```
+
+常用参数：
+
+```bash
+sudo bash install.sh --port 8080                      # 换端口
+sudo bash install.sh --bind 127.0.0.1                 # 只监听本机（配合反代，推荐）
+sudo bash install.sh --tls-cert /root/cert.pem --tls-key /root/key.pem   # 直接上 HTTPS/WSS
+sudo bash install.sh --skip-firewall                  # 不动防火墙
+```
+
+脚本做的事：
+
+1. 识别 `dnf/yum/apt`，安装 git/curl 等基础依赖
+2. 检测 Go，缺失或低于 1.21 则下载安装（默认走 `golang.google.cn`，失败自动回退 `go.dev`、`mirrors.aliyun.com`）
+3. 克隆/更新仓库到 `/opt/typewar`，用 `goproxy.cn` 拉模块并编译
+4. 创建 `typewar` 系统用户，写入 `/etc/systemd/system/typewar.service`（含 systemd 安全加固）
+5. 放行防火墙端口，启动服务并做健康检查
+
+**再次执行同一脚本即为升级**：拉最新代码 → 重新编译 → 重启。
+
+日常运维：
+
+```bash
+systemctl status typewar        # 状态
+journalctl -u typewar -f        # 实时日志
+systemctl restart typewar       # 重启
+```
+
+配置文件位于 `/etc/default/typewar`（`ADDR` / `TLS_CERT` / `TLS_KEY`）。
 
 **方式 B：Docker**
 
@@ -126,11 +154,40 @@ docker build -t typewar .
 docker run -d --name typewar -p 3000:3000 --restart unless-stopped typewar
 ```
 
-**TLS**：建议用 Caddy/Nginx 反代并签发证书，再将 443 转发到 `:3000`。
+**方式 C：手动单二进制**
 
-### 3. 让 Pages 上的前端连到你的服务器
+```bash
+./scripts/build.sh linux          # 产出 bin/typewar-linux-amd64、arm64
+scp bin/typewar-linux-amd64 user@vps:/opt/typewar
+scp -r public user@vps:/opt/typewar/
+ssh user@vps '/opt/typewar -addr :3000 -dir /opt/typewar/public'
+```
 
-在地址后加 `?ws=` 参数即可（`https` 页面必须用 `wss://`）：
+### 3. HTTPS / WSS（公网联机必需）
+
+GitHub Pages 是 https 页面，只能连 `wss://`，所以自建服务器必须配 TLS。两种方式：
+
+**A. 反向代理（推荐）**：服务器只监听本机，由 Caddy/Nginx 终结 TLS。
+
+```bash
+sudo bash install.sh --bind 127.0.0.1
+# Caddy：自动签发并续期证书，WebSocket 开箱可用
+sudo cp deploy/Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy
+# 或 Nginx（示例已含 /ws 的 Upgrade 头与长连接超时）
+sudo cp deploy/nginx.conf /etc/nginx/conf.d/typewar.conf && sudo nginx -s reload
+```
+
+**B. 服务端直接 TLS**：把证书交给脚本，Go 进程自己监听 443。
+
+```bash
+sudo bash install.sh --port 443 --tls-cert /path/fullchain.pem --tls-key /path/privkey.pem
+```
+
+> 阿里云还需要在 **ECS 安全组**放行对应端口（80/443 或自定义端口），否则外网访问不到。
+
+### 4. 让 Pages 上的前端连到你的服务器
+
+在地址后加 `?ws=` 参数即可：
 
 ```
 https://<用户名>.github.io/typewar/?ws=wss://game.example.com/ws
