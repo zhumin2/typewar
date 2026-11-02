@@ -380,8 +380,8 @@ body {
   display: flex; flex-direction: column; align-items: center; gap: 5px;
   will-change: transform, filter;
 }
-.fighter.foe { left: 27%; }
-.fighter.me  { right: 27%; }
+.fighter.me  { left: 27%; }
+.fighter.foe { right: 27%; }
 
 .f-hp {
   width: 104px; height: 5px; border-radius: 3px; overflow: hidden;
@@ -432,19 +432,19 @@ body {
   max-width: 118px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
-/* 攻击突进 */
+/* 攻击突进：我方在左 → 向右冲；敌方在右 → 向左冲 */
 .fighter.me.attacking  { animation: lungeMe 0.42s cubic-bezier(0.2, 0.9, 0.3, 1); }
 .fighter.foe.attacking { animation: lungeFoe 0.42s cubic-bezier(0.2, 0.9, 0.3, 1); }
 @keyframes lungeMe {
   0%   { transform: translateY(-50%) translateX(0); }
-  30%  { transform: translateY(-50%) translateX(-64px) scale(1.14); }
-  55%  { transform: translateY(-50%) translateX(-40px) scale(1.06); }
+  30%  { transform: translateY(-50%) translateX(64px) scale(1.14); }
+  55%  { transform: translateY(-50%) translateX(40px) scale(1.06); }
   100% { transform: translateY(-50%) translateX(0) scale(1); }
 }
 @keyframes lungeFoe {
   0%   { transform: translateY(-50%) translateX(0); }
-  30%  { transform: translateY(-50%) translateX(64px) scale(1.14); }
-  55%  { transform: translateY(-50%) translateX(40px) scale(1.06); }
+  30%  { transform: translateY(-50%) translateX(-64px) scale(1.14); }
+  55%  { transform: translateY(-50%) translateX(-40px) scale(1.06); }
   100% { transform: translateY(-50%) translateX(0) scale(1); }
 }
 
@@ -500,7 +500,8 @@ body {
 }
 .lane .words { position: absolute; inset: 0; }
 .lane .line { position: absolute; top: 0; bottom: 0; width: 3px; z-index: 3; }
-.me-lane .line { left: 0; background: linear-gradient(180deg, transparent, var(--cyan), transparent); box-shadow: 0 0 12px var(--cyan); }
+/* 双方词流都是「左 → 右」，防线统一在右侧 */
+.me-lane .line { right: 0; background: linear-gradient(180deg, transparent, var(--cyan), transparent); box-shadow: 0 0 12px var(--cyan); }
 .foe-lane .line { right: 0; background: linear-gradient(180deg, transparent, var(--red), transparent); box-shadow: 0 0 12px var(--red); }
 .line.hit-flash { animation: lineFlash 0.35s; }
 @keyframes lineFlash { 0% { filter: brightness(3); } 100% { filter: brightness(1); } }
@@ -550,7 +551,7 @@ body {
   75% { transform: translateY(calc(-50% + 1px)) translateX(1px); }
 }
 .word.escaped { animation: escapeFade 0.32s forwards; }
-@keyframes escapeFade { to { opacity: 0; transform: translateY(-50%) translateX(-18px) scale(0.85); filter: blur(3px); } }
+@keyframes escapeFade { to { opacity: 0; transform: translateY(-50%) scale(0.85); filter: blur(3px); } }
 
 /* 我方技能栏 */
 .combo-box {

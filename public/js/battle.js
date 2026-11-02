@@ -63,9 +63,9 @@ export class Battle {
     initFX(this.ui.root, this.ui.canvas);
     window.addEventListener('resize', resizeFX);
 
-    // 词流
+    // 词流：双方都是「左 → 右」，防线在右端
     this.lanes.me = new Lane({
-      root: this.ui.laneEl.me, dir: -1,
+      root: this.ui.laneEl.me, dir: +1,
       stream: new WordStream(this.seed, { vocab: this.cfg.vocab }),
       onDone: w => this.onWordDone('me', w),
       onEscape: w => this.onWordEscape('me', w),

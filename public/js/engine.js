@@ -32,7 +32,8 @@ export function renderWord(w) {
 export class Lane {
   /**
    * @param opts.root    .lane 容器（含 .words 子容器与 .line 防线）
-   * @param opts.dir     -1: 我方（右→左，防线在左）  +1: 敌方（左→右，防线在右）
+   * @param opts.dir     +1: 词从左侧生成、向右推进（防线在右，双方都用这个方向）
+   *                     -1: 反向（右→左），保留以备用
    * @param opts.stream  WordStream
    * @param opts.onDone    (word) => void      整词击破
    * @param opts.onEscape  (word) => void      词撞防线
