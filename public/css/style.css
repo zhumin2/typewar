@@ -83,7 +83,23 @@ body {
 /* ============================================================
    主菜单
    ============================================================ */
-.menu { justify-content: center; gap: 30px; }
+/* 主菜单：用 auto 边距居中，内容超高时不会被顶出视口（flex 居中的经典坑） */
+.menu { justify-content: flex-start; gap: 30px; }
+.menu > :first-child { margin-top: auto; }
+.menu > :last-child { margin-bottom: auto; }
+
+/* 矮屏（如 720p / 笔记本）压缩尺寸，避免菜单溢出 */
+@media (max-height: 820px) {
+  .menu { gap: 18px; padding-top: 12px; padding-bottom: 12px; }
+  .logo-main { font-size: 54px; }
+  .logo-sub { font-size: 12px; letter-spacing: 0.35em; margin-top: 4px; }
+  .mbtn { padding: 10px 18px; font-size: 15px; }
+  .mbtn small { font-size: 11.5px; }
+  .mb-ico { font-size: 22px; }
+  .strip-card { padding: 7px 14px; }
+  .strip-card span { font-size: 20px; }
+  .menu-foot { font-size: 11.5px; }
+}
 .logo { text-align: center; user-select: none; }
 .logo-main { font-size: 76px; font-weight: 900; letter-spacing: 0.22em; font-family: var(--font-word); }
 .logo-main .t1 { color: var(--cyan); text-shadow: 0 0 8px var(--cyan), 0 0 40px var(--cyan-dim), 3px 3px 0 rgba(255, 62, 245, 0.6); }
