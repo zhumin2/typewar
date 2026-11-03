@@ -24,8 +24,10 @@ class Net {
       this.ws.onopen = () => { this.connected = true; settled = true; resolve(); };
       this.ws.onerror = () => { if (!settled) { settled = true; reject(new Error('无法连接服务器')); } };
       this.ws.onclose = () => {
+        // 仅当此前真正连上过才广播断开，避免首次连接失败时覆盖掉具体错误提示
+        const had = this.connected;
         this.connected = false;
-        this.emit('_closed');
+        if (had) this.emit('_closed');
       };
       this.ws.onmessage = e => {
         let m;
