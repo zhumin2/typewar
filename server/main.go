@@ -42,10 +42,10 @@ var upgrader = websocket.Upgrader{
 }
 
 func main() {
-	addr := flag.String("addr", defaultAddr(), "监听地址")
+	addr := flag.String("addr", defaultAddr(), "监听地址（也可用 ADDR / PORT 环境变量）")
 	dir := flag.String("dir", "public", "静态文件目录")
-	cert := flag.String("tls-cert", "", "TLS 证书路径（可选）")
-	key := flag.String("tls-key", "", "TLS 私钥路径（可选）")
+	cert := flag.String("tls-cert", os.Getenv("TLS_CERT"), "TLS 证书路径（也可用 TLS_CERT 环境变量）")
+	key := flag.String("tls-key", os.Getenv("TLS_KEY"), "TLS 私钥路径（也可用 TLS_KEY 环境变量）")
 	flag.Parse()
 
 	root, err := filepath.Abs(*dir)
@@ -86,7 +86,11 @@ func main() {
 	log.Fatal(srv.ListenAndServe())
 }
 
+// defaultAddr 解析监听地址：ADDR 优先，其次 PORT，最后 :3000
 func defaultAddr() string {
+	if a := os.Getenv("ADDR"); a != "" {
+		return a
+	}
 	if p := os.Getenv("PORT"); p != "" {
 		if strings.HasPrefix(p, ":") {
 			return p
