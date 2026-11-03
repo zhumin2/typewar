@@ -8,7 +8,10 @@ let WORD_ID = 1;
 /** 构建单词的 DOM 元素（每个字母一个 span） */
 export function buildWordEl(w) {
   const el = document.createElement('div');
-  el.className = 'word' + (w.magic ? ' magic' : '') + (w.chaos ? ' chaos' : '');
+  el.className = 'word'
+    + (w.magic ? ' magic' : '')
+    + (w.chaos ? ' chaos' : '')
+    + (w.py ? ' py' : '');
   el.dataset.id = w.id;
   for (const ch of w.text) {
     const s = document.createElement('span');
@@ -77,10 +80,10 @@ export class Lane {
     this.spawnT = this.nextInterval();
   }
 
-  spawnWord({ text, magic, chaos, x, speed }) {
+  spawnWord({ text, magic, chaos, py, x, speed }) {
     const w = {
       id: WORD_ID++, text, typed: 0,
-      magic: !!magic, chaos: !!chaos,
+      magic: !!magic, chaos: !!chaos, py: !!py,
       x: x !== undefined ? x : (this.dir < 0 ? 100 : 0),
       speed: speed || this.wordSpeed(),
       alive: true,
@@ -114,19 +117,20 @@ export class Lane {
     }
   }
 
-  /** 键入一个字母；返回 'hit' | 'miss' */
+  /** 键入一个字母；返回 'hit' | 'miss'。大小写不敏感，以支持 True/False/None */
   input(ch) {
+    const c = String(ch).toLowerCase();
     const w = this.locked;
     if (w && w.alive) {
-      if (w.text[w.typed] === ch) { this.hitLetter(w); return 'hit'; }
+      if (w.text[w.typed].toLowerCase() === c) { this.hitLetter(w); return 'hit'; }
       this.onLetter(null, 'miss');
       return 'miss';
     }
     // 未锁定：找以该字母开头的词，选最接近防线的
     let best = null;
-    for (const c of this.words) {
-      if (c.alive && c.text[0] === ch) {
-        if (!best || this.prog(c) > this.prog(best)) best = c;
+    for (const cand of this.words) {
+      if (cand.alive && cand.text[0].toLowerCase() === c) {
+        if (!best || this.prog(cand) > this.prog(best)) best = cand;
       }
     }
     if (best) { this.locked = best; this.hitLetter(best); return 'hit'; }
@@ -172,7 +176,7 @@ export class Lane {
   }
 
   serialize() {
-    return this.words.map(w => ({ id: w.id, text: w.text, typed: w.typed, x: Math.round(w.x * 10) / 10, magic: w.magic, chaos: w.chaos }));
+    return this.words.map(w => ({ id: w.id, text: w.text, typed: w.typed, x: Math.round(w.x * 10) / 10, magic: w.magic, chaos: w.chaos, py: w.py }));
   }
 
   destroy() {
@@ -201,7 +205,7 @@ export class RemoteLane {
       alive.add(d.id);
       let w = this.map.get(d.id);
       if (!w) {
-        w = { id: d.id, text: d.text, typed: d.typed, magic: d.magic, chaos: d.chaos, x: d.x, tx: d.x, alive: true };
+        w = { id: d.id, text: d.text, typed: d.typed, magic: d.magic, chaos: d.chaos, py: d.py, x: d.x, tx: d.x, alive: true };
         w.el = buildWordEl(w);
         this.wordsEl.appendChild(w.el);
         w.el.style.left = w.x + '%';

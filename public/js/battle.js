@@ -65,7 +65,7 @@ export class Battle {
     // 词流
     this.lanes.me = new Lane({
       root: this.ui.laneEl.me, dir: -1,
-      stream: new WordStream(this.seed),
+      stream: new WordStream(this.seed, { vocab: this.cfg.vocab }),
       onDone: w => this.onWordDone('me', w),
       onEscape: w => this.onWordEscape('me', w),
       onLetter: (w, type) => this.onLetter('me', w, type),
@@ -75,7 +75,7 @@ export class Battle {
     if (this.mode === 'pve') {
       this.lanes.foe = new Lane({
         root: this.ui.laneEl.foe, dir: +1,
-        stream: new WordStream((this.seed ^ 0x9E3779B9) >>> 0),
+        stream: new WordStream((this.seed ^ 0x9E3779B9) >>> 0, { vocab: this.cfg.vocab }),
         onDone: w => this.onWordDone('foe', w),
         onEscape: w => this.onWordEscape('foe', w),
         onLetter: (w, type) => this.onLetter('foe', w, type),

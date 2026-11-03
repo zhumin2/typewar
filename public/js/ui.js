@@ -3,7 +3,7 @@
  * 主菜单 / PVE 配置 / PVP 加入 / PVP 大厅 / 战斗壳 / 结算
  * 状态与回调由 main.js 注入
  */
-import { CARDS, SKILLS, DIFFICULTIES } from './data.js';
+import { CARDS, SKILLS, DIFFICULTIES, VOCAB_MODES } from './data.js';
 
 const app = () => document.getElementById('app');
 
@@ -89,6 +89,7 @@ function helpModalHTML() {
           <li>每敲对一个字母 → <b class="ap">+行动力(AP)</b>，连击 +1</li>
           <li>敲完整个单词 → 自动发起<b>普攻</b>（伤害随词长和连击提升）</li>
           <li><b class="mp">紫色魔法词 ✦</b> → 击破后额外奖励大量<b class="mp">魔法力(MP)</b></li>
+          <li><b style="color:#51ff9e">绿色代码词 &gt;</b> → Python 关键字/内置函数，打字不区分大小写（<code>True</code> 敲 <code>true</code> 即可）</li>
           <li>敲错字母 → 连击清零</li>
           <li>词漂到防线没打掉 → 你自己掉血！</li>
         </ul>
@@ -106,7 +107,7 @@ function toggleHelp(show) {
 
 /* ---------------- PVE 配置 ---------------- */
 export function showPveSetup({ onBack, onStart }) {
-  let difficulty = null, card = null;
+  let difficulty = null, card = null, vocab = 'mixed';
   app().innerHTML = `
   <div class="screen setup">
     <div class="screen-head"><button class="btn back">← 返回</button><h1>🤖 单人挑战</h1></div>
@@ -118,6 +119,14 @@ export function showPveSetup({ onBack, onStart }) {
           <button class="diff" data-diff="${d.id}">
             <span class="d-ico">${d.icon}</span>
             <span class="d-txt"><b>${d.name}</b><small>${d.desc} · AI ${d.wpm} WPM</small></span>
+          </button>`).join('')}
+        </div>
+        <h2 class="mt">选择词库</h2>
+        <div class="vocab-list">
+          ${Object.values(VOCAB_MODES).map(v => `
+          <button class="vocab ${v.id === vocab ? 'picked' : ''}" data-vocab="${v.id}">
+            <span class="v-ico">${v.icon}</span>
+            <span class="v-txt"><b>${v.name}</b><small>${v.desc}</small></span>
           </button>`).join('')}
         </div>
       </div>
@@ -139,6 +148,12 @@ export function showPveSetup({ onBack, onStart }) {
     difficulty = b.dataset.diff;
     checkReady();
   }));
+  const vocabBtns = app().querySelectorAll('.vocab');
+  vocabBtns.forEach(b => b.addEventListener('click', () => {
+    vocabBtns.forEach(x => x.classList.remove('picked'));
+    b.classList.add('picked');
+    vocab = b.dataset.vocab;
+  }));
   bindCardGrid(app().querySelector('#pve-cards'), id => { card = id; checkReady(); });
 
   function checkReady() {
@@ -148,7 +163,7 @@ export function showPveSetup({ onBack, onStart }) {
     btn.textContent = ok ? `⚔️ 以 ${CARDS[card].name} 挑战「${DIFFICULTIES[difficulty].name}」开战！` : '选择难度与人物后开战';
   }
   app().querySelector('#pve-start').addEventListener('click', () => {
-    if (difficulty && card) onStart(difficulty, card);
+    if (difficulty && card) onStart(difficulty, card, vocab);
   });
 }
 

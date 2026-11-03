@@ -382,6 +382,31 @@ export const WORDS = {
     'arcane','ember','quasar','zenith','aurora','cinder','glyph','sigil','sorcery','enchant',
     'phantom','specter','wraith','fathom','abyssal','radiant','oblivion','incant',
   ],
+  // Python 词库（绿色 > 标记，含关键字与常用内置函数）
+  // 注意：只收纯字母——引擎只接受 a-z 键位，带下划线的 __init__ 之类无法输入
+  python: [
+    // 35 个关键字（含 True/False/None，打字不区分大小写）
+    'False','None','True','and','as','assert','async','await','break','class','continue',
+    'def','del','elif','else','except','finally','for','from','global','if','import','in',
+    'is','lambda','nonlocal','not','or','pass','raise','return','try','while','with','yield',
+    // 软关键字
+    'match','case','type',
+    // 常用内置函数 / 名称
+    'print','len','range','int','str','list','dict','set','tuple','float','bool','sum','min',
+    'max','abs','all','any','map','filter','zip','open','input','id','hex','bin','oct','ord',
+    'chr','iter','next','repr','eval','exec','dir','vars','hash','round','sorted','reversed',
+    'enumerate','isinstance','issubclass','getattr','setattr','hasattr','delattr','super',
+    'self','cls','args','kwargs','format','bytes','object','complex','slice','frozenset',
+    'staticmethod','classmethod','property','callable','compile','globals','locals','ascii',
+    'divmod','pow','memoryview','breakpoint',
+  ],
+};
+
+/** 词库模式 */
+export const VOCAB_MODES = {
+  english: { id: 'english', name: '标准', icon: '🔤', desc: '通用英文词' },
+  mixed:   { id: 'mixed',   name: '混合', icon: '🔀', desc: '英文词 + Python 保留字' },
+  python:  { id: 'python',  name: 'Python', icon: '🐍', desc: '纯 Python 关键字/内置' },
 };
 
 // AI 特技使用优先级（按卡片）

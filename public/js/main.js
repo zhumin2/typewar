@@ -29,16 +29,17 @@ function launchBattle(cfg) {
   window.__battle = battle; // 调试 / 自动化测试钩子
 }
 
-function startPve(difficultyId, cardId) {
+function startPve(difficultyId, cardId, vocab = 'mixed') {
   launchBattle({
     mode: 'pve',
     myCard: cardId,
     foeCard: pickFoeCard(cardId),
     difficulty: DIFFICULTIES[difficultyId],
+    vocab,
     seed: (Math.random() * 2 ** 31) | 0,
     onEnd: r => showResult(r, {
       pvp: false,
-      onAgain: () => startPve(difficultyId, cardId),
+      onAgain: () => startPve(difficultyId, cardId, vocab),
       onMenu: backToMenu,
     }),
   });

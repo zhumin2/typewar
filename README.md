@@ -24,10 +24,27 @@ npm start
 | 敲错字母 | 连击清零 |
 | 打完整词 | 自动普攻（伤害随词长与连击提升） |
 | 击破紫色魔法词 ✦ | 额外奖励魔法力(MP) |
+| 击破绿色代码词 > | Python 关键字/内置函数（打字不区分大小写） |
 | 词漂到防线未击破 | 自己掉血！ |
 | `1` / `2` / `3` | 释放特技（也可点击技能按钮） |
 
 HP 归零的一方落败。
+
+## 词库
+
+PVE 配置页可选三种词库：
+
+| 模式 | 内容 |
+|---|---|
+| 🔤 标准 | 约 1750 个通用英文词，按战斗时长提升词长 |
+| 🔀 混合（默认） | 英文词 + 约 22% 的 Python 词 |
+| 🐍 Python | 只出 Python 词（另保留少量魔法词作为 MP 来源） |
+
+**Python 词库**包含 35 个关键字（`False` `None` `True` `and` `as` `assert` `async` `await` `break` `class` `continue` `def` `del` `elif` `else` `except` `finally` `for` `from` `global` `if` `import` `in` `is` `lambda` `nonlocal` `not` `or` `pass` `raise` `return` `try` `while` `with` `yield`）、软关键字（`match` `case` `type`）以及常用内置函数（`print` `len` `range` `isinstance` `enumerate` …），共 107 个。
+
+> 大小写不敏感：`True` 敲 `true` 即可。
+> 带下划线的名字（`__init__`、`__main__`）未收录——引擎只接受 a-z 键位，无法输入下划线。
+> PVP 对战固定使用「混合」词库。
 
 ## 人物卡（各 3 个特技）
 
@@ -47,6 +64,7 @@ HP 归零的一方落败。
 - **前端**：原生 HTML/CSS/JS（ES Modules），零构建；DOM 词流 + Canvas 粒子特效 + WebAudio 合成音效
 - **后端**：Node.js + `ws`：静态托管 + WebSocket 房间（创建/加入/就绪/事件转发）
 - **PVP 同步**：服务器下发 RNG 种子；双方各自权威模拟己方（快照 8Hz 同步词流与状态），攻击/特技以事件广播由受害方权威结算；掉线判负
+- **部署**：GitHub Pages（静态托管 PVE）。PVP 需要 WebSocket 服务器，可在地址后加 `?ws=wss://你的服务器/ws` 指向自建实例
 
 ## 目录结构
 
