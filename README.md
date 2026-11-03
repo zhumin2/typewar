@@ -4,17 +4,27 @@
 
 ## 快速开始
 
+需要 **Go 1.21+**（服务端已用 Go 重写，无其它依赖）。
+
 ```bash
-npm install
-npm start
+go run ./server
+# 或使用 npm start（等价于上一条命令）
 # 打开 http://localhost:3000
 ```
 
-- **PVE**：主菜单 → 单人挑战 → 选难度 + 人物卡 → 开战
+- **PVE**：主菜单 → 单人挑战 → 选难度 + 词库 + 人物卡 → 开战
 - **PVP**：一台设备开两个标签页，或同一局域网的两台设备（访问主机 IP:3000）
   - 玩家 1：创建对战 → 获得房间码
   - 玩家 2：加入房间 → 输入房间码
   - 双方选卡、就绪 → 倒计时开战
+
+启动参数：
+
+```bash
+go run ./server -addr :8080          # 改端口（也可用 PORT 环境变量）
+go run ./server -dir ./public        # 改静态目录
+go run ./server -tls-cert c.pem -tls-key k.pem   # 直接提供 HTTPS/WSS（否则建议放在反向代理后）
+```
 
 ## 玩法规则
 
@@ -62,27 +72,68 @@ PVE 配置页可选三种词库：
 ## 技术栈
 
 - **前端**：原生 HTML/CSS/JS（ES Modules），零构建；DOM 词流 + Canvas 粒子特效 + WebAudio 合成音效
-- **后端**：Node.js + `ws`：静态托管 + WebSocket 房间（创建/加入/就绪/事件转发）
+- **后端**：Go + `gorilla/websocket`：静态托管 + WebSocket 房间（创建/加入/就绪/事件转发），编译为单二进制，无运行时依赖
 - **PVP 同步**：服务器下发 RNG 种子；双方各自权威模拟己方（快照 8Hz 同步词流与状态），攻击/特技以事件广播由受害方权威结算；掉线判负
-- **部署**：GitHub Pages（静态托管 PVE）。PVP 需要 WebSocket 服务器，可在地址后加 `?ws=wss://你的服务器/ws` 指向自建实例
+- **部署**：GitHub Pages（静态托管 PVE）+ 自建 Go 服务器（PVP），前端用 `?ws=wss://...` 指定联机地址
 
 ## 目录结构
 
 ```
-server/
-  index.js          # HTTP 静态服务 + WebSocket 入口
-  room.js           # 房间管理：创建/加入/就绪/转发/再战/掉线
+server/             # Go 服务端（单二进制，无运行时依赖）
+  main.go           # HTTP 静态托管 + /ws 升级 + TLS/端口/目录参数
+  room.go           # 连接读写泵、Hub、房间协议（创建/加入/就绪/转发/再战/掉线）
 public/
   js/
-    data.js         # 人物卡、特技、难度、词库（2200+ 词条）
-    words.js        # 种子化词流生成器（长度分级/魔法词/干扰词）
-    engine.js       # 打字引擎 Lane（生成/移动/匹配/击破/撞线）
+    data.js         # 人物卡、特技、难度、词库（1700+ 英文词 + 107 Python 词）
+    words.js        # 种子化词流生成器（长度分级/魔法词/干扰词/词库模式）
+    engine.js       # 打字引擎 Lane（生成/移动/匹配/击破/撞线，大小写不敏感）
     skills.js       # 特技结算（PVE 本地 / PVP 收发）
     battle.js       # 战斗控制器（资源/连击/DoT/护盾/同步）
     ai.js           # AI 对手（WPM/准确率/技能策略）
-    net.js          # WebSocket 客户端
+    net.js          # WebSocket 客户端（支持 ?ws= 指定服务器）
     fx.js           # 粒子/浮动数字/弹道/屏震/音效
     ui.js           # 页面渲染（菜单/配置/大厅/结算）
     main.js         # 入口：页面流状态与网络事件
   css/style.css     # 霓虹科幻主题
+scripts/build.sh    # 交叉编译（linux/windows/darwin）
+Dockerfile          # 多阶段构建镜像
 ```
+
+## 部署
+
+前端是纯静态资源，可托管在任意静态站点；**PVP 需要这台 Go 服务器**。
+
+### 1. 静态前端 → GitHub Pages
+
+已配置 `.github/workflows/deploy-pages.yml`，推送 `main` 即自动发布 `public/`。
+线上地址形如 `https://<用户名>.github.io/typewar/`（PVE 直接可玩）。
+
+### 2. 联机服务器 → 任意 VPS
+
+**方式 A：单二进制**
+
+```bash
+./scripts/build.sh linux          # 产出 bin/typewar-linux-amd64、arm64
+scp bin/typewar-linux-amd64 user@vps:/opt/typewar
+scp -r public user@vps:/opt/typewar/
+ssh user@vps '/opt/typewar -addr :3000 -dir /opt/typewar/public'
+```
+
+**方式 B：Docker**
+
+```bash
+docker build -t typewar .
+docker run -d --name typewar -p 3000:3000 --restart unless-stopped typewar
+```
+
+**TLS**：建议用 Caddy/Nginx 反代并签发证书，再将 443 转发到 `:3000`。
+
+### 3. 让 Pages 上的前端连到你的服务器
+
+在地址后加 `?ws=` 参数即可（`https` 页面必须用 `wss://`）：
+
+```
+https://<用户名>.github.io/typewar/?ws=wss://game.example.com/ws
+```
+
+自建前端与服务器同源时无需该参数，默认连 `location.host/ws`。

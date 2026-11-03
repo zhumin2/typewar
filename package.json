@@ -1,15 +1,10 @@
 {
   "name": "typewar",
-  "version": "1.0.0",
-  "description": "TypeWar — 打字对战游戏：打字积攒行动力与魔法力，释放特技击败对手（PVE / PVP）",
-  "main": "server/index.js",
+  "version": "2.0.0",
+  "description": "TypeWar — 打字对战游戏：打字积攒行动力与魔法力，释放特技击败对手（PVE / PVP）。服务端为 Go 实现，此文件仅提供 npm start 便捷入口。",
   "scripts": {
-    "start": "node server/index.js"
+    "start": "go run ./server",
+    "build": "go build -o bin/typewar ./server"
   },
-  "engines": {
-    "node": ">=16"
-  },
-  "dependencies": {
-    "ws": "^8.18.0"
-  }
+  "private": true
 }

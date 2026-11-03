@@ -1,0 +1,7 @@
+.git
+.github
+bin
+node_modules
+*.md
+Dockerfile
+.dockerignore
