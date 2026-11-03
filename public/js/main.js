@@ -5,6 +5,7 @@ import { CARDS, DIFFICULTIES } from './data.js';
 import { Battle } from './battle.js';
 import { net } from './net.js';
 import { showMenu, showPveSetup, showJoin, showLobby, showBattleScreen, showResult, showPeerAgain, toast } from './ui.js';
+import { showPractice } from './practice.js';
 
 const screenState = { name: 'menu' };
 
@@ -77,6 +78,10 @@ function renderMenu() {
         onBack: backToMenu,
         onJoinCode: code => net.send({ t: 'join', code }),
       });
+    },
+    onPractice: () => {
+      screenState.name = 'practice';
+      showPractice({ onBack: backToMenu });
     },
   });
 }

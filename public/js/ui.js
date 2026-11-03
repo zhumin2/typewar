@@ -48,7 +48,7 @@ function bindCardGrid(root, onPick) {
 }
 
 /* ---------------- 主菜单 ---------------- */
-export function showMenu({ onPve, onCreate, onJoin }) {
+export function showMenu({ onPve, onCreate, onJoin, onPractice }) {
   app().innerHTML = `
   <div class="screen menu">
     <div class="logo">
@@ -59,6 +59,7 @@ export function showMenu({ onPve, onCreate, onJoin }) {
       <button class="mbtn primary" data-act="pve"><span class="mb-ico">🤖</span><span>单人挑战<small>PVE · 四档难度 AI</small></span></button>
       <button class="mbtn" data-act="create"><span class="mb-ico">🛰️</span><span>创建对战<small>PVP · 生成房间码邀请好友</small></span></button>
       <button class="mbtn" data-act="join"><span class="mb-ico">🔗</span><span>加入房间<small>PVP · 输入好友的房间码</small></span></button>
+      <button class="mbtn" data-act="practice"><span class="mb-ico">⌨️</span><span>指法练习<small>键位训练 · 手速与准确率</small></span></button>
       <button class="mbtn ghost" data-act="help"><span class="mb-ico">📜</span><span>玩法说明<small>两分钟上手</small></span></button>
     </div>
     <div class="cards-strip">
@@ -71,6 +72,7 @@ export function showMenu({ onPve, onCreate, onJoin }) {
   app().querySelector('[data-act="pve"]').addEventListener('click', onPve);
   app().querySelector('[data-act="create"]').addEventListener('click', onCreate);
   app().querySelector('[data-act="join"]').addEventListener('click', onJoin);
+  app().querySelector('[data-act="practice"]').addEventListener('click', onPractice);
   app().querySelector('[data-act="help"]').addEventListener('click', () => toggleHelp(true));
   app().querySelector('.help-modal').addEventListener('click', e => {
     if (e.target.classList.contains('help-modal')) toggleHelp(false);
