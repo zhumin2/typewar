@@ -19,6 +19,7 @@ const FINGER_OF = {
   i: 'R3', k: 'R3',
   '.': 'R2',
   o: 'R2', l: 'R2',
+  ';': 'R1',
   p: 'R1',
 };
 
@@ -36,9 +37,12 @@ const FINGER_INFO = {
 // 键盘布局：shift-l / shift-r 是左右两个 Shift 键
 const KEY_ROWS = [
   ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
-  ['shift-l', 'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'shift-r'],
+  ['shift-l', 'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', 'shift-r'],
   ['z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.'],
 ];
+
+// 各手指的基准键（手部示意图的手掌与指尖锚点）
+const HOME_KEY = { L1: 'a', L2: 's', L3: 'd', L4: 'f', R4: 'j', R3: 'k', R2: 'l', R1: ';' };
 
 // 基础键位：以基准键（asdfghjkl）为主的真实单词
 const HOME_WORDS = [
@@ -168,7 +172,7 @@ export function showPractice({ onBack }) {
     const f = FINGER_OF[k];
     const c = f ? FINGER_INFO[f].color : '#7d93c0';
     const home = (k === 'f' || k === 'j') ? ' home-key' : '';
-    const label = k === ',' ? ',' : k === '.' ? '.' : k.toUpperCase();
+    const label = k === ',' ? ',' : k === '.' ? '.' : k === ';' ? ';' : k.toUpperCase();
     return `<div class="pr-key${home}" data-key="${k}" style="--fc:${c}"><span>${label}</span></div>`;
   };
 
@@ -178,6 +182,131 @@ export function showPractice({ onBack }) {
 
   const keyEls = new Map();
   elKeyboard.querySelectorAll('.pr-key').forEach(el => keyEls.set(el.dataset.key, el));
+
+  /* ---------------- 手部指法示意图 ---------------- */
+  // 两只手用 SVG 画在键盘上，指尖落在基准键；当前要按的键对应的手指高亮
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  let handSvg = null;
+  const fingerEls = new Map();
+  const baseD = new Map();   // 手指默认姿态
+  const altD = new Map();    // 小指伸向 Shift 的姿态
+
+  /** 上宽下窄的锥形手指路径（带轻微弯曲） */
+  function fingerPath(id, from, to) {
+    const dx = to.x - from.x, dy = to.y - from.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = -dy / len, ny = dx / len;           // 法向
+    const thumb = id.endsWith('0');
+    const w0 = thumb ? 15 : 19;
+    const w1 = thumb ? 11 : 13;
+    const cx = (from.x + to.x) / 2 + dx * 0.18;
+    const cy = (from.y + to.y) / 2;
+    const p = (px, py) => `${px.toFixed(1)} ${py.toFixed(1)}`;
+    return [
+      `M ${p(from.x + nx * w0 / 2, from.y + ny * w0 / 2)}`,
+      `Q ${p(cx + nx * w1 / 2, cy + ny * w1 / 2)} ${p(to.x + nx * w1 / 2, to.y + ny * w1 / 2)}`,
+      `A ${(w1 / 2).toFixed(1)} ${(w1 / 2).toFixed(1)} 0 0 1 ${p(to.x - nx * w1 / 2, to.y - ny * w1 / 2)}`,
+      `Q ${p(cx - nx * w0 / 2, cy - ny * w0 / 2)} ${p(from.x - nx * w0 / 2, from.y - ny * w0 / 2)}`,
+      'Z',
+    ].join(' ');
+  }
+
+  function buildHands() {
+    if (handSvg) { handSvg.remove(); handSvg = null; }
+    fingerEls.clear();
+    baseD.clear();
+    altD.clear();
+    const kb = elKeyboard.getBoundingClientRect();
+    if (!kb.width || !kb.height || !keyEls.size) return;
+
+    const W = kb.width, H = kb.height;
+    const centerOf = (k) => {
+      const el = keyEls.get(k);
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { x: r.left - kb.left + r.width / 2, y: r.top - kb.top + r.height / 2 };
+    };
+
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('class', 'hand-layer');
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    svg.setAttribute('width', W);
+    svg.setAttribute('height', H);
+
+    const palmY = H - 42;               // 手掌位于键盘下方留白区
+    const leftKeys = ['a', 's', 'd', 'f'].map(centerOf);
+    const rightKeys = ['j', 'k', 'l', ';'].map(centerOf);
+    if (leftKeys.some(k => !k) || rightKeys.some(k => !k)) return;
+
+    const leftPalm = { x: (leftKeys[0].x + leftKeys[3].x) / 2, y: palmY };
+    const rightPalm = { x: (rightKeys[0].x + rightKeys[3].x) / 2, y: palmY };
+
+    const addPalm = (p) => {
+      const wrist = document.createElementNS(SVG_NS, 'rect');
+      wrist.setAttribute('x', (p.x - 25).toFixed(1));
+      wrist.setAttribute('y', (p.y + 12).toFixed(1));
+      wrist.setAttribute('width', '50');
+      wrist.setAttribute('height', '30');
+      wrist.setAttribute('rx', '13');
+      wrist.setAttribute('class', 'hand-palm');
+      svg.appendChild(wrist);
+
+      const e = document.createElementNS(SVG_NS, 'ellipse');
+      e.setAttribute('cx', p.x.toFixed(1));
+      e.setAttribute('cy', p.y.toFixed(1));
+      e.setAttribute('rx', '52');
+      e.setAttribute('ry', '26');
+      e.setAttribute('class', 'hand-palm');
+      svg.appendChild(e);
+    };
+    addPalm(leftPalm);
+    addPalm(rightPalm);
+
+    const addFinger = (id, from, to) => {
+      const el = document.createElementNS(SVG_NS, 'path');
+      el.setAttribute('d', fingerPath(id, from, to));
+      el.setAttribute('class', 'hand-finger');
+      el.dataset.finger = id;
+      svg.appendChild(el);
+      fingerEls.set(id, el);
+      baseD.set(id, el.getAttribute('d'));
+    };
+
+    // 四指：从左/右依次铺开，指尖指向各自基准键
+    const spread = (palm) => [-30, -10, 10, 30].map(dx => ({ x: palm.x + dx, y: palm.y - 22 }));
+    const lStart = spread(leftPalm);
+    const rStart = spread(rightPalm);
+    ['L1', 'L2', 'L3', 'L4'].forEach((id, i) => addFinger(id, lStart[i], leftKeys[i]));
+    ['R4', 'R3', 'R2', 'R1'].forEach((id, i) => addFinger(id, rStart[i], rightKeys[i]));
+
+    // 拇指：搭在空格键
+    const space = centerOf(' ');
+    if (space) {
+      addFinger('L0', { x: leftPalm.x + 30, y: palmY - 16 }, { x: space.x - 70, y: space.y });
+      addFinger('R0', { x: rightPalm.x - 30, y: palmY - 16 }, { x: space.x + 70, y: space.y });
+    }
+
+    // 小指伸向 Shift 的姿态（仅用于大写字母时的提示）
+    const shiftR = centerOf('shift-r');
+    const shiftL = centerOf('shift-l');
+    if (shiftR) altD.set('R1', fingerPath('R1', rStart[3], shiftR));
+    if (shiftL) altD.set('L1', fingerPath('L1', lStart[0], shiftL));
+
+    elKeyboard.appendChild(svg);
+    handSvg = svg;
+    // 手型建好后重绘一次，把「当前该用哪根手指」的高亮补上
+    render();
+  }
+
+  /** 高亮指定手指；shiftFinger 为按 Shift 的那根小指，会伸向 Shift 键 */
+  function updateHands(activeIds, shiftFinger) {
+    fingerEls.forEach((el, id) => {
+      const active = activeIds.includes(id);
+      el.classList.toggle('is-active', active);
+      const useAlt = active && id === shiftFinger && altD.has(id);
+      el.setAttribute('d', useAlt ? altD.get(id) : (baseD.get(id) || el.getAttribute('d')));
+    });
+  }
 
   /* ---------------- 流程 ---------------- */
   function newRound() {
@@ -220,6 +349,8 @@ export function showPractice({ onBack }) {
     // 下一个键 + 手指提示
     const nextCh = item[state.typed];
     keyEls.forEach(el => el.classList.remove('next-key'));
+    const activeFingers = [];
+    let shiftFinger = null;
     if (nextCh) {
       const isUpper = /[A-Z]/.test(nextCh);
       const keyName = nextCh === ' ' ? ' ' : nextCh.toLowerCase();
@@ -233,15 +364,19 @@ export function showPractice({ onBack }) {
         if (sEl) sEl.classList.add('next-key');
         const sName = side === 'shift-r' ? '右手小指' : '左手小指';
         shiftHint = `<span class="pr-shift" style="color:#8a7dff">${sName} Shift</span> + `;
+        shiftFinger = side === 'shift-r' ? 'R1' : 'L1';
+        activeFingers.push(shiftFinger);
       }
 
       const f = FINGER_OF[keyName];
+      if (f) activeFingers.push(f);
       const info = f ? FINGER_INFO[f] : null;
       const fingerTxt = info ? `<span class="pr-finger" style="color:${info.color}">${info.name}</span> · ` : '';
       elTip.innerHTML = `${fingerTxt}${shiftHint}按 <b>${esc(keyLabel(nextCh))}</b>`;
     } else if (state.done) {
       elTip.textContent = '练习完成';
     }
+    updateHands(activeFingers, shiftFinger);
 
     renderStats();
   }
@@ -336,8 +471,10 @@ export function showPractice({ onBack }) {
 
   /* ---------------- 事件绑定 ---------------- */
   let timer = null;
+  const onResize = () => buildHands();
   const cleanup = () => {
     window.removeEventListener('keydown', onKey);
+    window.removeEventListener('resize', onResize);
     if (timer) clearInterval(timer);
   };
 
@@ -352,7 +489,10 @@ export function showPractice({ onBack }) {
   });
 
   window.addEventListener('keydown', onKey);
+  window.addEventListener('resize', onResize);
   newRound();
+  // 首帧布局完成后再画手（此时键位才有真实尺寸）
+  requestAnimationFrame(() => buildHands());
   timer = setInterval(() => {
     if (state.done || !app.querySelector('#pr-wpm')) { clearInterval(timer); return; }
     renderStats();
