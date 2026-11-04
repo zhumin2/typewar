@@ -184,38 +184,99 @@ export function showPractice({ onBack }) {
   elKeyboard.querySelectorAll('.pr-key').forEach(el => keyEls.set(el.dataset.key, el));
 
   /* ---------------- 手部指法示意图 ---------------- */
-  // 两只手用 SVG 画在键盘上，指尖落在基准键；当前要按的键对应的手指高亮
+  // 线稿风双手铺在键盘上；当前手指会弯向真正要按的那个键并高亮
   const SVG_NS = 'http://www.w3.org/2000/svg';
   let handSvg = null;
+  let geom = null;                 // { starts, centerOf }
   const fingerEls = new Map();
-  const baseD = new Map();   // 手指默认姿态
-  const altD = new Map();    // 小指伸向 Shift 的姿态
 
-  /** 上宽下窄的锥形手指路径（带轻微弯曲） */
-  function fingerPath(id, from, to) {
+  /** 单根手指的轮廓关键点（按 x 排序，便于左右手统一拼接） */
+  function fingerOutline(id, from, to) {
     const dx = to.x - from.x, dy = to.y - from.y;
     const len = Math.hypot(dx, dy) || 1;
-    const nx = -dy / len, ny = dx / len;           // 法向
+    const ux = dx / len, uy = dy / len;        // 指向指尖
+    const nx = -uy, ny = ux;                   // 法向
     const thumb = id.endsWith('0');
-    const w0 = thumb ? 15 : 19;
-    const w1 = thumb ? 11 : 13;
-    const cx = (from.x + to.x) / 2 + dx * 0.18;
-    const cy = (from.y + to.y) / 2;
-    const p = (px, py) => `${px.toFixed(1)} ${py.toFixed(1)}`;
-    return [
-      `M ${p(from.x + nx * w0 / 2, from.y + ny * w0 / 2)}`,
-      `Q ${p(cx + nx * w1 / 2, cy + ny * w1 / 2)} ${p(to.x + nx * w1 / 2, to.y + ny * w1 / 2)}`,
-      `A ${(w1 / 2).toFixed(1)} ${(w1 / 2).toFixed(1)} 0 0 1 ${p(to.x - nx * w1 / 2, to.y - ny * w1 / 2)}`,
-      `Q ${p(cx - nx * w0 / 2, cy - ny * w0 / 2)} ${p(from.x - nx * w0 / 2, from.y - ny * w0 / 2)}`,
-      'Z',
-    ].join(' ');
+    const w0 = thumb ? 34 : 42;                // 指根
+    const w1 = thumb ? 27 : 33;                // 指尖
+    const pair = (x, y, w) => [
+      [x - nx * w / 2, y - ny * w / 2],
+      [x + nx * w / 2, y + ny * w / 2],
+    ].sort((a, b) => a[0] - b[0]);
+    const [bL, bR] = pair(from.x, from.y, w0);
+    const [tL, tR] = pair(to.x, to.y, w1);
+    // 指缝点：从指根朝指尖走 42% 处（真实手指下半段是连着的）
+    const wk = 0.42;
+    const wx = from.x + dx * wk, wy = from.y + dy * wk;
+    const ww = w0 + (w1 - w0) * wk;
+    const [wL, wR] = pair(wx, wy, ww);
+    return { bL, bR, tL, tR, wL, wR, tipExt: [to.x + ux * w1 * 0.55, to.y + uy * w1 * 0.55] };
+  }
+
+  const P = (pt) => `${pt[0].toFixed(1)} ${pt[1].toFixed(1)}`;
+
+  /**
+   * 整只手的轮廓：四指 + 拇指 + 掌背 + 手腕，一笔画成
+   * fingers 按「外侧 → 内侧」排序；skip 里的手指挖掉（当前要动的那个）
+   */
+  function handPath(fingers, side, palm, skip) {
+    const list = fingers.filter(f => f.id !== skip);
+    const y = palm.y;
+    const q = (x, yy) => `${x.toFixed(1)} ${yy.toFixed(1)}`;
+    const inner = (dx) => palm.x - side * dx;   // 拇指一侧
+    const outer = (dx) => palm.x + side * dx;   // 小指一侧
+
+    const d = [];
+    let startPt = null;
+    let prevWeb = null;
+    list.forEach((f, i) => {
+      const o = fingerOutline(f.id, f.from, f.to);
+      // 左手自左向右走，右手自右向左走
+      const webIn = side < 0 ? o.wL : o.wR;
+      const webOut = side < 0 ? o.wR : o.wL;
+      const tipIn = side < 0 ? o.tL : o.tR;
+      const tipOut = side < 0 ? o.tR : o.tL;
+
+      if (i === 0) {
+        startPt = webIn;
+        d.push(`M ${P(webIn)}`);
+      } else {
+        // 指缝：两指之间浅弧相连
+        const cx = (prevWeb[0] + webIn[0]) / 2;
+        const cy = Math.max(prevWeb[1], webIn[1]) + 14;
+        d.push(`Q ${cx.toFixed(1)} ${cy.toFixed(1)} ${P(webIn)}`);
+      }
+      d.push(`L ${P(tipIn)}`);
+      d.push(`Q ${P(o.tipExt)} ${P(tipOut)}`);
+      d.push(`L ${P(webOut)}`);
+      prevWeb = webOut;
+    });
+
+    if (skip !== (side < 0 ? 'L0' : 'R0')) {
+      // 拇指：从掌内侧斜伸出去
+      d.push(`L ${q(inner(58), y - 12)}`);
+      d.push(`Q ${q(inner(90), y - 6)} ${q(inner(86), y + 20)}`);
+      d.push(`Q ${q(inner(64), y + 30)} ${q(inner(42), y + 22)}`);
+    }
+    // 内侧 → 手腕 → 外侧回到第一根手指
+    d.push(`L ${q(inner(36), y + 34)}`);
+    d.push(`L ${q(inner(36), y + 76)}`);
+    d.push(`L ${q(outer(36), y + 76)}`);
+    d.push(`L ${q(outer(36), y + 40)}`);
+    d.push(`Q ${q(outer(78), y + 14)} ${P(startPt)}`);
+    d.push('Z');
+    return d.join(' ');
+  }
+
+  /** 单独一根手指的闭合轮廓（用于高亮的那根） */
+  function fingerShape(id, from, to) {
+    const o = fingerOutline(id, from, to);
+    return `M ${P(o.bL)} L ${P(o.tL)} Q ${P(o.tipExt)} ${P(o.tR)} L ${P(o.bR)} Z`;
   }
 
   function buildHands() {
     if (handSvg) { handSvg.remove(); handSvg = null; }
     fingerEls.clear();
-    baseD.clear();
-    altD.clear();
     const kb = elKeyboard.getBoundingClientRect();
     if (!kb.width || !kb.height || !keyEls.size) return;
 
@@ -233,78 +294,89 @@ export function showPractice({ onBack }) {
     svg.setAttribute('width', W);
     svg.setAttribute('height', H);
 
-    const palmY = H - 42;               // 手掌位于键盘下方留白区
-    const leftKeys = ['a', 's', 'd', 'f'].map(centerOf);
-    const rightKeys = ['j', 'k', 'l', ';'].map(centerOf);
-    if (leftKeys.some(k => !k) || rightKeys.some(k => !k)) return;
-
-    const leftPalm = { x: (leftKeys[0].x + leftKeys[3].x) / 2, y: palmY };
-    const rightPalm = { x: (rightKeys[0].x + rightKeys[3].x) / 2, y: palmY };
-
-    const addPalm = (p) => {
-      const wrist = document.createElementNS(SVG_NS, 'rect');
-      wrist.setAttribute('x', (p.x - 25).toFixed(1));
-      wrist.setAttribute('y', (p.y + 12).toFixed(1));
-      wrist.setAttribute('width', '50');
-      wrist.setAttribute('height', '30');
-      wrist.setAttribute('rx', '13');
-      wrist.setAttribute('class', 'hand-palm');
-      svg.appendChild(wrist);
-
-      const e = document.createElementNS(SVG_NS, 'ellipse');
-      e.setAttribute('cx', p.x.toFixed(1));
-      e.setAttribute('cy', p.y.toFixed(1));
-      e.setAttribute('rx', '52');
-      e.setAttribute('ry', '26');
-      e.setAttribute('class', 'hand-palm');
-      svg.appendChild(e);
+    const palmY = H - 74;
+    const home = {
+      L1: 'a', L2: 's', L3: 'd', L4: 'f',
+      R4: 'j', R3: 'k', R2: 'l', R1: ';',
     };
-    addPalm(leftPalm);
-    addPalm(rightPalm);
+    const leftPalm = { x: Math.round((centerOf('a').x + centerOf('f').x) / 2), y: palmY };
+    const rightPalm = { x: Math.round((centerOf('j').x + centerOf(';').x) / 2), y: palmY };
 
-    const addFinger = (id, from, to) => {
-      const el = document.createElementNS(SVG_NS, 'path');
-      el.setAttribute('d', fingerPath(id, from, to));
-      el.setAttribute('class', 'hand-finger');
-      el.dataset.finger = id;
-      svg.appendChild(el);
-      fingerEls.set(id, el);
-      baseD.set(id, el.getAttribute('d'));
+    const starts = {};
+    const hands = [];
+
+    const addHand = (side, palm, order) => {
+      // 左手自左向右排，右手自右向左排（外侧先）
+      const offsets = side < 0 ? [-66, -22, 22, 66] : [66, 22, -22, -66];
+      const fingers = order.map((id, i) => {
+        const from = { x: palm.x + offsets[i], y: palm.y - 46 };
+        const to = centerOf(home[id]);
+        starts[id] = from;
+        return { id, from, to };
+      });
+      // 拇指起点
+      const thumbId = side < 0 ? 'L0' : 'R0';
+      const space = centerOf(' ');
+      starts[thumbId] = { x: palm.x + side * 62, y: palm.y - 6 };
+
+      const palmEl = document.createElementNS(SVG_NS, 'path');
+      palmEl.setAttribute('class', 'hand-palm');
+      palmEl.setAttribute('d', handPath(fingers, side, palm, null));
+      svg.appendChild(palmEl);
+
+      // 指节线：掌背顶部的一道浅弧
+      const knuckle = document.createElementNS(SVG_NS, 'path');
+      const ky = palm.y - 34;
+      knuckle.setAttribute('d',
+        `M ${(palm.x - side * 60).toFixed(1)} ${ky.toFixed(1)} Q ${palm.x.toFixed(1)} ${(ky + 12).toFixed(1)} ${(palm.x + side * 60).toFixed(1)} ${ky.toFixed(1)}`);
+      knuckle.setAttribute('class', 'hand-detail');
+      svg.appendChild(knuckle);
+
+      hands.push({ side, palm, fingers, palmEl, thumbId });
+
+      // 每根手指一个可叠加的高亮元素（默认隐藏）
+      [...fingers.map(f => f.id), thumbId].forEach(id => {
+        const el = document.createElementNS(SVG_NS, 'path');
+        el.setAttribute('class', 'hand-finger');
+        el.dataset.finger = id;
+        el.style.display = 'none';
+        svg.appendChild(el);
+        fingerEls.set(id, el);
+      });
     };
 
-    // 四指：从左/右依次铺开，指尖指向各自基准键
-    const spread = (palm) => [-30, -10, 10, 30].map(dx => ({ x: palm.x + dx, y: palm.y - 22 }));
-    const lStart = spread(leftPalm);
-    const rStart = spread(rightPalm);
-    ['L1', 'L2', 'L3', 'L4'].forEach((id, i) => addFinger(id, lStart[i], leftKeys[i]));
-    ['R4', 'R3', 'R2', 'R1'].forEach((id, i) => addFinger(id, rStart[i], rightKeys[i]));
-
-    // 拇指：搭在空格键
-    const space = centerOf(' ');
-    if (space) {
-      addFinger('L0', { x: leftPalm.x + 30, y: palmY - 16 }, { x: space.x - 70, y: space.y });
-      addFinger('R0', { x: rightPalm.x - 30, y: palmY - 16 }, { x: space.x + 70, y: space.y });
-    }
-
-    // 小指伸向 Shift 的姿态（仅用于大写字母时的提示）
-    const shiftR = centerOf('shift-r');
-    const shiftL = centerOf('shift-l');
-    if (shiftR) altD.set('R1', fingerPath('R1', rStart[3], shiftR));
-    if (shiftL) altD.set('L1', fingerPath('L1', lStart[0], shiftL));
+    // 左手：小指 → 食指；右手：小指 → 食指（外侧先行）
+    addHand(-1, leftPalm, ['L1', 'L2', 'L3', 'L4']);
+    addHand(1, rightPalm, ['R1', 'R2', 'R3', 'R4']);
 
     elKeyboard.appendChild(svg);
     handSvg = svg;
-    // 手型建好后重绘一次，把「当前该用哪根手指」的高亮补上
+    geom = { starts, centerOf, hands };
     render();
   }
 
-  /** 高亮指定手指；shiftFinger 为按 Shift 的那根小指，会伸向 Shift 键 */
-  function updateHands(activeIds, shiftFinger) {
+  /**
+   * 高亮指定手指，并让它们伸向各自的目标键
+   * @param activeIds 手指 id 数组
+   * @param targets   Map<fingerId, key>
+   */
+  function updateHands(activeIds, targets) {
+    if (!geom) return;
+    // 手型保持完整，高亮手指直接叠在上面（挖掉会在手上留缺口）
+    geom.hands.forEach(h => {
+      h.palmEl.setAttribute('d', handPath(h.fingers, h.side, h.palm, null));
+    });
+
+    // 2) 叠加高亮的那根手指，伸到真正要按的键
     fingerEls.forEach((el, id) => {
       const active = activeIds.includes(id);
       el.classList.toggle('is-active', active);
-      const useAlt = active && id === shiftFinger && altD.has(id);
-      el.setAttribute('d', useAlt ? altD.get(id) : (baseD.get(id) || el.getAttribute('d')));
+      if (!active) { el.style.display = 'none'; return; }
+      el.style.display = '';
+      const key = targets ? targets.get(id) : null;
+      let to = key ? geom.centerOf(key) : null;
+      if (key === ' ') to = to ? { x: to.x + (id === 'R0' ? 40 : -40), y: to.y } : null;
+      if (to) el.setAttribute('d', fingerShape(id, geom.starts[id], to));
     });
   }
 
@@ -349,8 +421,7 @@ export function showPractice({ onBack }) {
     // 下一个键 + 手指提示
     const nextCh = item[state.typed];
     keyEls.forEach(el => el.classList.remove('next-key'));
-    const activeFingers = [];
-    let shiftFinger = null;
+    const fingerTargets = new Map();
     if (nextCh) {
       const isUpper = /[A-Z]/.test(nextCh);
       const keyName = nextCh === ' ' ? ' ' : nextCh.toLowerCase();
@@ -364,19 +435,24 @@ export function showPractice({ onBack }) {
         if (sEl) sEl.classList.add('next-key');
         const sName = side === 'shift-r' ? '右手小指' : '左手小指';
         shiftHint = `<span class="pr-shift" style="color:#8a7dff">${sName} Shift</span> + `;
-        shiftFinger = side === 'shift-r' ? 'R1' : 'L1';
-        activeFingers.push(shiftFinger);
+        fingerTargets.set(side === 'shift-r' ? 'R1' : 'L1', side);
       }
 
-      const f = FINGER_OF[keyName];
-      if (f) activeFingers.push(f);
+      // 空格交给右手拇指
+      if (keyName === ' ') fingerTargets.set('R0', ' ');
+      else {
+        const f = FINGER_OF[keyName];
+        if (f) fingerTargets.set(f, keyName);
+      }
+
+      const f = keyName === ' ' ? 'R0' : FINGER_OF[keyName];
       const info = f ? FINGER_INFO[f] : null;
       const fingerTxt = info ? `<span class="pr-finger" style="color:${info.color}">${info.name}</span> · ` : '';
       elTip.innerHTML = `${fingerTxt}${shiftHint}按 <b>${esc(keyLabel(nextCh))}</b>`;
     } else if (state.done) {
       elTip.textContent = '练习完成';
     }
-    updateHands(activeFingers, shiftFinger);
+    updateHands([...fingerTargets.keys()], fingerTargets);
 
     renderStats();
   }
