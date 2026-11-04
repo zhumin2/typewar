@@ -210,7 +210,14 @@ export function showPractice({ onBack }) {
     const wx = from.x + dx * wk, wy = from.y + dy * wk;
     const ww = w0 + (w1 - w0) * wk;
     const [wL, wR] = pair(wx, wy, ww);
-    return { bL, bR, tL, tR, wL, wR, tipExt: [to.x + ux * w1 * 0.55, to.y + uy * w1 * 0.55] };
+    // 两个指节位置，用来画关节折痕
+    const joints = [0.36, 0.66].map((k) => {
+      const jx = from.x + dx * k, jy = from.y + dy * k;
+      const jw = (w0 + (w1 - w0) * k) * 0.76;
+      const [jl, jr] = pair(jx, jy, jw);
+      return { l: jl, r: jr };
+    });
+    return { bL, bR, tL, tR, wL, wR, joints, tipExt: [to.x + ux * w1 * 0.55, to.y + uy * w1 * 0.55] };
   }
 
   const P = (pt) => `${pt[0].toFixed(1)} ${pt[1].toFixed(1)}`;
@@ -323,6 +330,36 @@ export function showPractice({ onBack }) {
       palmEl.setAttribute('class', 'hand-palm');
       palmEl.setAttribute('d', handPath(fingers, side, palm, null));
       svg.appendChild(palmEl);
+
+      // 指节折痕 + 指甲，让手更像手
+      fingers.forEach(f => {
+        const o = fingerOutline(f.id, f.from, f.to);
+        const dx = f.to.x - f.from.x, dy = f.to.y - f.from.y;
+        const len = Math.hypot(dx, dy) || 1;
+        const ux = dx / len, uy = dy / len;
+        const nx = -uy, ny = ux;
+
+        o.joints.forEach(j => {
+          const cx = (j.l[0] + j.r[0]) / 2 + ux * 5;
+          const cy = (j.l[1] + j.r[1]) / 2 + uy * 5;
+          const cr = document.createElementNS(SVG_NS, 'path');
+          cr.setAttribute('d', `M ${P(j.l)} Q ${cx.toFixed(1)} ${cy.toFixed(1)} ${P(j.r)}`);
+          cr.setAttribute('class', 'hand-detail');
+          svg.appendChild(cr);
+        });
+
+        // 指甲：靠近指尖的小椭圆，沿手指方向
+        const nailCx = f.from.x + dx * 0.9;
+        const nailCy = f.from.y + dy * 0.9;
+        const nail = document.createElementNS(SVG_NS, 'ellipse');
+        nail.setAttribute('cx', nailCx.toFixed(1));
+        nail.setAttribute('cy', nailCy.toFixed(1));
+        nail.setAttribute('rx', (33 * 0.22).toFixed(1));
+        nail.setAttribute('ry', (len * 0.06).toFixed(1));
+        nail.setAttribute('transform', `rotate(${(Math.atan2(dy, dx) * 180 / Math.PI + 90).toFixed(1)} ${nailCx.toFixed(1)} ${nailCy.toFixed(1)})`);
+        nail.setAttribute('class', 'hand-nail');
+        svg.appendChild(nail);
+      });
 
       // 指节线：掌背顶部的一道浅弧
       const knuckle = document.createElementNS(SVG_NS, 'path');

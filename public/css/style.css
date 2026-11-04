@@ -781,9 +781,14 @@ body {
 }
 .hand-detail {
   fill: none;
-  stroke: rgba(160, 180, 220, 0.22);
-  stroke-width: 1.4;
+  stroke: rgba(160, 180, 220, 0.3);
+  stroke-width: 1.5;
   stroke-linecap: round;
+}
+.hand-nail {
+  fill: rgba(190, 210, 240, 0.22);
+  stroke: rgba(160, 180, 220, 0.3);
+  stroke-width: 1;
 }
 .hand-finger {
   fill: rgba(150, 172, 214, 0.08);
