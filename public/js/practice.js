@@ -189,6 +189,7 @@ export function showPractice({ onBack }) {
   let handSvg = null;
   let geom = null;                 // { starts, centerOf }
   const fingerEls = new Map();
+  const detailEls = new Map();     // 每根手指的指节线/指甲，挖掉手指时一起隐藏
 
   /** 单根手指的轮廓关键点（按 x 排序，便于左右手统一拼接） */
   function fingerOutline(id, from, to) {
@@ -338,6 +339,7 @@ export function showPractice({ onBack }) {
         const len = Math.hypot(dx, dy) || 1;
         const ux = dx / len, uy = dy / len;
         const nx = -uy, ny = ux;
+        const parts = [];
 
         o.joints.forEach(j => {
           const cx = (j.l[0] + j.r[0]) / 2 + ux * 5;
@@ -346,6 +348,7 @@ export function showPractice({ onBack }) {
           cr.setAttribute('d', `M ${P(j.l)} Q ${cx.toFixed(1)} ${cy.toFixed(1)} ${P(j.r)}`);
           cr.setAttribute('class', 'hand-detail');
           svg.appendChild(cr);
+          parts.push(cr);
         });
 
         // 指甲：靠近指尖的小椭圆，沿手指方向
@@ -359,6 +362,9 @@ export function showPractice({ onBack }) {
         nail.setAttribute('transform', `rotate(${(Math.atan2(dy, dx) * 180 / Math.PI + 90).toFixed(1)} ${nailCx.toFixed(1)} ${nailCy.toFixed(1)})`);
         nail.setAttribute('class', 'hand-nail');
         svg.appendChild(nail);
+        parts.push(nail);
+
+        detailEls.set(f.id, parts);
       });
 
       // 指节线：掌背顶部的一道浅弧
@@ -399,9 +405,18 @@ export function showPractice({ onBack }) {
    */
   function updateHands(activeIds, targets) {
     if (!geom) return;
-    // 手型保持完整，高亮手指直接叠在上面（挖掉会在手上留缺口）
+    // 把当前要动的手指从轮廓里挖掉，下面再用同样的几何画成蓝色补上，
+    // 否则会出现「灰色的原位手指 + 蓝色的目标手指」双指重影
     geom.hands.forEach(h => {
-      h.palmEl.setAttribute('d', handPath(h.fingers, h.side, h.palm, null));
+      let skip = null;
+      const hit = h.fingers.find(f => activeIds.includes(f.id));
+      if (hit) skip = hit.id;
+      else if (activeIds.includes(h.thumbId)) skip = h.thumbId;
+      h.palmEl.setAttribute('d', handPath(h.fingers, h.side, h.palm, skip));
+      // 被挖掉那根手指的指节线/指甲也要一起隐藏
+      detailEls.forEach((parts, id) => {
+        parts.forEach(el => { el.style.display = id === skip ? 'none' : ''; });
+      });
     });
 
     // 2) 叠加高亮的那根手指，伸到真正要按的键
