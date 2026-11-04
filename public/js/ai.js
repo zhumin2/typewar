@@ -78,6 +78,8 @@ export class AIController {
       // 情境判断
       let use = false;
       if (id === 'kai_wall' || id === 'ying_leech') use = myHpRatio < 0.5;
+      else if (id === 'lin_bastion') use = myHpRatio < 0.62;
+      else if (id === 'lin_purify') use = s.dots.length > 0 || b.t < s.silencedUntil || myHpRatio < 0.55;
       else if (id === 'kai_shout' || id === 'feng_wind') use = Math.random() < 0.7;
       else if (id === 'li_drain') use = b.S.me.mp > 30 || s.mp < 25;
       else if (id === 'ying_chaos') use = b.lanes.me.words.length >= 3 || Math.random() < 0.4;

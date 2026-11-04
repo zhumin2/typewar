@@ -11,20 +11,28 @@ export function buildWordEl(w) {
   el.className = 'word'
     + (w.magic ? ' magic' : '')
     + (w.chaos ? ' chaos' : '')
-    + (w.py ? ' py' : '');
+    + (w.py ? ' py' : '')
+    + (w.gold ? ' gold' : '')
+    + (w.bomb ? ' bomb' : '');
   el.dataset.id = w.id;
   for (const ch of w.text) {
     const s = document.createElement('span');
     s.textContent = ch;
     el.appendChild(s);
   }
+  if (w.bomb) {
+    const fu = document.createElement('i');
+    fu.className = 'fuse';
+    fu.textContent = Math.ceil(w.fuse ?? 0);
+    el.appendChild(fu);
+  }
   return el;
 }
 
-/** 按已输入进度渲染字母高亮 */
+/** 按已输入进度渲染字母高亮（只动字母 span，别碰引信等附加元素） */
 export function renderWord(w) {
   const spans = w.el.children;
-  for (let i = 0; i < spans.length; i++) {
+  for (let i = 0; i < w.text.length; i++) {
     spans[i].className = i < w.typed ? 'done' : (i === w.typed ? 'next' : '');
   }
 }
@@ -37,6 +45,7 @@ export class Lane {
    * @param opts.stream  WordStream
    * @param opts.onDone    (word) => void      整词击破
    * @param opts.onEscape  (word) => void      词撞防线
+   * @param opts.onExplode (word) => void      炸弹引信烧完
    * @param opts.onLetter  (word|null, 'hit'|'miss') => void
    */
   constructor(opts) {
@@ -47,6 +56,7 @@ export class Lane {
     this.stream = opts.stream;
     this.onDone = opts.onDone;
     this.onEscape = opts.onEscape;
+    this.onExplode = opts.onExplode;
     this.onLetter = opts.onLetter;
     this.words = [];
     this.locked = null;
@@ -81,10 +91,11 @@ export class Lane {
     this.spawnT = this.nextInterval();
   }
 
-  spawnWord({ text, magic, chaos, py, x, speed }) {
+  spawnWord({ text, magic, chaos, py, gold, bomb, fuse, x, speed }) {
     const w = {
       id: WORD_ID++, text, typed: 0,
-      magic: !!magic, chaos: !!chaos, py: !!py,
+      magic: !!magic, chaos: !!chaos, py: !!py, gold: !!gold, bomb: !!bomb,
+      fuse: bomb ? (fuse ?? 3.5) : 0,
       x: x !== undefined ? x : (this.dir < 0 ? 100 : 0),
       speed: speed || this.wordSpeed(),
       alive: true,
@@ -115,7 +126,31 @@ export class Lane {
       w.x += this.dir * w.speed * slow * dt;
       if (this.dir < 0 ? w.x <= 0 : w.x >= 100) { this.escapeWord(w); continue; }
       w.el.style.left = w.x + '%';
+
+      // 炸弹词：引信走真实时间（不受减速影响）
+      if (w.bomb) {
+        w.fuse -= dt;
+        if (w.fuse <= 0) { this.explodeWord(w); continue; }
+        const badge = w.el.querySelector('.fuse');
+        if (badge) {
+          const shown = Math.ceil(w.fuse);
+          if (badge.textContent !== String(shown)) badge.textContent = shown;
+          w.el.classList.toggle('about-to-blow', w.fuse <= 1.2);
+        }
+      }
     }
+  }
+
+  /** 炸弹引信烧完：词消失并回调（由战斗层结算自伤） */
+  explodeWord(w) {
+    if (!w.alive) return;
+    w.alive = false;
+    this.words = this.words.filter(x => x !== w);
+    if (this.locked === w) this.locked = null;
+    w.el.classList.add('exploded');
+    const el = w.el;
+    setTimeout(() => el.remove(), 320);
+    if (this.onExplode) this.onExplode(w);
   }
 
   /** 键入一个字母；返回 'hit' | 'miss'。大小写不敏感，以支持 True/False/None */
@@ -177,7 +212,11 @@ export class Lane {
   }
 
   serialize() {
-    return this.words.map(w => ({ id: w.id, text: w.text, typed: w.typed, x: Math.round(w.x * 10) / 10, magic: w.magic, chaos: w.chaos, py: w.py }));
+    return this.words.map(w => ({
+      id: w.id, text: w.text, typed: w.typed, x: Math.round(w.x * 10) / 10,
+      magic: w.magic, chaos: w.chaos, py: w.py, gold: w.gold,
+      bomb: w.bomb, fuse: w.bomb ? Math.round(w.fuse * 10) / 10 : 0,
+    }));
   }
 
   destroy() {
@@ -206,7 +245,12 @@ export class RemoteLane {
       alive.add(d.id);
       let w = this.map.get(d.id);
       if (!w) {
-        w = { id: d.id, text: d.text, typed: d.typed, magic: d.magic, chaos: d.chaos, py: d.py, x: d.x, tx: d.x, alive: true };
+        w = {
+          id: d.id, text: d.text, typed: d.typed,
+          magic: d.magic, chaos: d.chaos, py: d.py, gold: d.gold, bomb: d.bomb,
+          fuse: d.fuse || 0,
+          x: d.x, tx: d.x, alive: true,
+        };
         w.el = buildWordEl(w);
         this.wordsEl.appendChild(w.el);
         w.el.style.left = w.x + '%';
@@ -215,6 +259,11 @@ export class RemoteLane {
       } else {
         if (d.typed !== w.typed) { w.typed = d.typed; renderWord(w); }
         w.tx = d.x;
+        if (w.bomb && d.fuse !== undefined) {
+          w.fuse = d.fuse;
+          const badge = w.el.querySelector('.fuse');
+          if (badge) badge.textContent = Math.max(1, Math.ceil(d.fuse));
+        }
       }
     }
     // 移除已消失的词

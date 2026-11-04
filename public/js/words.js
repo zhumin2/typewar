@@ -95,25 +95,34 @@ export class WordStream {
   }
 
   next(t) {
-    // 魔法词优先（紫色，击破奖励 MP）
-    if (this.rng() < 0.12) return { text: this.pick(POOLS.magic), magic: true };
+    const isPy = this.pyRate > 0 && this.rng() < this.pyRate;
+    const kindRoll = this.rng();
+    // 特殊词：魔法(紫) / 金词(加行动力) / 炸弹(限时)
+    let kind = null;
+    if (kindRoll < 0.10) kind = 'magic';
+    else if (kindRoll < 0.18) kind = 'gold';
+    else if (kindRoll < 0.26) kind = 'bomb';
 
-    // Python 词库（绿色 > 标记）
-    if (this.pyRate > 0 && this.rng() < this.pyRate) {
-      return { text: this.pick(POOLS.python), py: true };
+    if (kind === 'magic') return { text: this.pick(POOLS.magic), magic: true };
+
+    let pool;
+    if (isPy) pool = POOLS.python;
+    else {
+      let pShort, pMid;
+      if (t < 25)      { pShort = 0.70; pMid = 0.30; }
+      else if (t < 60) { pShort = 0.35; pMid = 0.50; }
+      else             { pShort = 0.15; pMid = 0.50; }
+      const roll = this.rng();
+      pool = POOLS.short;
+      if (roll > pShort + pMid) pool = POOLS.long;
+      else if (roll > pShort) pool = POOLS.mid;
     }
 
-    let pShort, pMid;
-    if (t < 25)      { pShort = 0.70; pMid = 0.30; }
-    else if (t < 60) { pShort = 0.35; pMid = 0.50; }
-    else             { pShort = 0.15; pMid = 0.50; }
-
-    const roll = this.rng();
-    let pool = POOLS.short;
-    if (roll > pShort + pMid) pool = POOLS.long;
-    else if (roll > pShort) pool = POOLS.mid;
-
-    return { text: this.pick(pool), magic: false };
+    const out = { text: this.pick(pool) };
+    if (kind === 'gold') out.gold = true;
+    if (kind === 'bomb') out.bomb = true;
+    if (isPy) out.py = true;
+    return out;
   }
 }
 

@@ -14,6 +14,10 @@ export const CFG = {
   shieldCap: 60,         // 护盾上限
   comboDamageCap: 60,    // 连击伤害加成上限（连击数）
   countdown: 3.2,        // 开战倒计时（秒）
+  goldAp: 30,            // 击破金词的额外行动力
+  bombFuse: 3.5,         // 炸弹词引信（秒），到时未击破即爆炸
+  bombDamage: 8,         // 炸弹爆炸自伤
+  comboMilestone: 25,    // 每累计多少连击触发一次冲击波
 };
 
 export const CARDS = {
@@ -36,6 +40,11 @@ export const CARDS = {
     id: 'ying', name: '术士·影', title: '暗蚀支配者', hp: 95, icon: '🌑', color: '#8a7dff',
     desc: '阴险的干扰大师，污染对手词流并吞噬其生命。',
     skills: ['ying_chaos', 'ying_leech', 'ying_shadow'],
+  },
+  lin: {
+    id: 'lin', name: '圣骑士·凛', title: '曙光守护', hp: 110, icon: '🕊️', color: '#ffd166',
+    desc: '以圣光自愈与净化立身，越打越稳，适合持久战。',
+    skills: ['lin_smite', 'lin_purify', 'lin_bastion'],
   },
 };
 
@@ -118,6 +127,26 @@ export const SKILLS = {
     cost: { mp: 45 }, cd: 14, target: 'foe',
     desc: '每秒 4 点暗蚀伤害持续 6 秒，并沉默对方特技 4 秒。',
     eff: { dot: { dps: 4, dur: 6, kind: 'shadow' }, silence: 4 },
+  },
+
+  // —— 圣骑士·凛 ——
+  lin_smite: {
+    id: 'lin_smite', card: 'lin', name: '圣光斩', icon: '🌟', color: '#ffd166',
+    cost: { ap: 35 }, cd: 6, target: 'foe',
+    desc: '造成 22 点伤害，并把造成的伤害转化为自身治疗。',
+    eff: { dmg: 22, vamp: true },
+  },
+  lin_purify: {
+    id: 'lin_purify', card: 'lin', name: '净化', icon: '💧', color: '#7ae0ff',
+    cost: { ap: 20 }, cd: 12, target: 'self',
+    desc: '清除自身所有减益（中毒/减速/沉默），并回复 18 点生命。',
+    eff: { heal: 18, cleanse: true },
+  },
+  lin_bastion: {
+    id: 'lin_bastion', card: 'lin', name: '圣盾', icon: '🔰', color: '#51ff9e',
+    cost: { mp: 30 }, cd: 14, target: 'self',
+    desc: '展开可吸收 30 点伤害的护盾，持续 12 秒。',
+    eff: { shield: { n: 30, dur: 12 } },
   },
 };
 
@@ -415,4 +444,5 @@ export const AI_SKILL_POLICY = {
   li: ['li_frost', 'li_drain', 'li_flame'],
   feng: ['feng_poison', 'feng_arrows', 'feng_wind'],
   ying: ['ying_chaos', 'ying_shadow', 'ying_leech'],
+  lin: ['lin_purify', 'lin_bastion', 'lin_smite'],
 };

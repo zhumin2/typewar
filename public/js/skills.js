@@ -9,7 +9,9 @@ export function canCast(b, side, idx) {
   const s = b.S[side];
   const sk = SKILLS[s.card.skills[idx]];
   if (b.over) return { ok: false, why: 'over' };
-  if (b.t < s.silencedUntil) return { ok: false, why: 'silenced' };
+  // 净化类技能无视沉默，否则沉默无法被解除
+  const canCleanse = !!(sk.eff && sk.eff.cleanse);
+  if (b.t < s.silencedUntil && !canCleanse) return { ok: false, why: 'silenced' };
   if (s.cds[idx] > 0) return { ok: false, why: 'cd' };
   if (sk.cost.ap && s.ap < sk.cost.ap) return { ok: false, why: 'ap' };
   if (sk.cost.mp && s.mp < sk.cost.mp) return { ok: false, why: 'mp' };
@@ -76,6 +78,7 @@ export function applyEffectLocal(b, side, eff, { predicted = false } = {}) {
   if (eff.shield) b.addShield(side, eff.shield.n, eff.shield.dur);
 
   if (!predicted) {
+    if (eff.cleanse) b.applyCleanse(side);
     if (eff.slow) b.applySlow(other, eff.slow);
     if (eff.silence) b.applySilence(other, eff.silence);
     if (eff.dot) b.applyDot(other, eff.dot, side);

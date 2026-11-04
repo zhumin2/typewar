@@ -92,10 +92,14 @@ function helpModalHTML() {
           <li>敲完整个单词 → 自动发起<b>普攻</b>（伤害随词长和连击提升）</li>
           <li><b class="mp">紫色魔法词 ✦</b> → 击破后额外奖励大量<b class="mp">魔法力(MP)</b></li>
           <li><b style="color:#51ff9e">绿色代码词 &gt;</b> → Python 关键字/内置函数，打字不区分大小写（<code>True</code> 敲 <code>true</code> 即可）</li>
+          <li><b style="color:#ffd166">金色词 ★</b> → 击破直接 <b class="ap">+30 行动力</b>，别错过</li>
+          <li><b style="color:#ff7a2f">炸弹词 💣</b> → 右上角数字是引信倒计时，<b>烧完会炸伤自己</b>，优先拆它</li>
+          <li><b style="color:#ffd166">连击冲击 🔥</b> → 每累计 25 连击自动向对手放一道冲击波</li>
           <li>敲错字母 → 连击清零</li>
           <li>词漂到防线没打掉 → 你自己掉血！</li>
         </ul>
         <p><b>✨ 特技</b><br>按 <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> 或点击技能按钮释放。不同人物卡拥有不同特技：爆发伤害、增益 buff、护盾、中毒、偷蓝，甚至向对手词流注入乱序干扰词！</p>
+        <p><b>⏸ 暂停</b>：对局中按 <kbd>Esc</kbd> 冻结计时与词流，再按一次继续。右上角 🔊 可随时开关音效。</p>
         <p><b>🤖 PVE</b>：选择难度与人物卡，击败 AI。<br><b>🛰️ PVP</b>：创建房间把房间码告诉好友，双方选卡就绪后开战。</p>
       </div>
       <button class="btn primary help-close">明白了</button>

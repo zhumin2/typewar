@@ -555,6 +555,54 @@ body {
   text-shadow: 0 0 8px var(--green);
 }
 .word.py span.done { color: var(--green); text-shadow: 0 0 8px var(--green); }
+
+/* 金词：击破大幅回行动力 */
+.word.gold {
+  color: #fff3c4; border-color: rgba(255, 209, 102, 0.75);
+  box-shadow: 0 0 16px rgba(255, 209, 102, 0.45), inset 0 0 14px rgba(255, 209, 102, 0.12);
+  animation: goldGlow 1.4s ease-in-out infinite;
+}
+.word.gold::before {
+  content: '★'; color: #ffd166; margin-right: 5px;
+  text-shadow: 0 0 10px #ffd166;
+}
+.word.gold span.done { color: #ffd166; text-shadow: 0 0 10px #ffd166; }
+@keyframes goldGlow {
+  0%, 100% { box-shadow: 0 0 12px rgba(255, 209, 102, 0.35), inset 0 0 12px rgba(255, 209, 102, 0.1); }
+  50%      { box-shadow: 0 0 26px rgba(255, 209, 102, 0.7), inset 0 0 18px rgba(255, 209, 102, 0.18); }
+}
+
+/* 炸弹词：限时打完，否则爆炸自伤 */
+.word.bomb {
+  color: #ffd9c2; border-color: rgba(255, 122, 47, 0.8);
+  box-shadow: 0 0 16px rgba(255, 122, 47, 0.45);
+  animation: bombPulse 0.6s ease-in-out infinite;
+  padding-right: 30px;
+}
+.word.bomb::before {
+  content: '💣'; margin-right: 5px; filter: drop-shadow(0 0 6px #ff7a2f);
+}
+.word.bomb span.done { color: #ff9a4d; text-shadow: 0 0 10px #ff7a2f; }
+.word.bomb .fuse {
+  position: absolute; right: 5px; top: 50%; transform: translateY(-50%);
+  font-style: normal; font-size: 12px; font-weight: 800;
+  color: #ffb08a; background: rgba(255, 122, 47, 0.18);
+  border: 1px solid rgba(255, 122, 47, 0.55); border-radius: 6px;
+  padding: 0 5px; line-height: 16px;
+}
+.word.bomb.about-to-blow { animation-duration: 0.2s; }
+.word.bomb.about-to-blow .fuse { color: #fff; background: #ff4d2e; border-color: #ff8a66; }
+@keyframes bombPulse {
+  0%, 100% { box-shadow: 0 0 12px rgba(255, 122, 47, 0.35); }
+  50%      { box-shadow: 0 0 26px rgba(255, 122, 47, 0.75); }
+}
+.word.exploded { animation: bombBlast 0.32s forwards; }
+@keyframes bombBlast {
+  0%   { opacity: 1; transform: translateY(-50%) scale(1); filter: brightness(3); }
+  100% { opacity: 0; transform: translateY(-50%) scale(1.5); filter: blur(4px); }
+}
+
+.f-gold { color: #ffd166; font-size: 22px; }
 .word.chaos {
   color: #ffb3c8; border-color: rgba(255, 62, 96, 0.55);
   box-shadow: 0 0 10px rgba(255, 62, 96, 0.3);
@@ -776,6 +824,46 @@ body {
   .pr-key-shift { width: 58px; }
   .pr-stats { flex-wrap: wrap; }
 }
+/* 暂停 */
+.pause-layer {
+  position: absolute; inset: 0; z-index: 85;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(3, 6, 14, 0.62); backdrop-filter: blur(2px);
+}
+.pause-layer[hidden] { display: none; }
+.pause-panel {
+  text-align: center; padding: 26px 46px; border-radius: 16px;
+  background: var(--panel-2); border: 1px solid var(--cyan-dim);
+  box-shadow: 0 0 50px rgba(34, 230, 255, 0.15);
+}
+.pause-title { font-size: 26px; font-weight: 800; color: var(--cyan); letter-spacing: 0.1em; }
+.pause-tip { margin-top: 8px; font-size: 13px; color: var(--text-dim); }
+.pause-tip kbd {
+  background: #12203c; border: 1px solid rgba(120, 170, 255, 0.4); border-radius: 5px;
+  padding: 1px 7px; font-family: var(--font-word); color: var(--cyan);
+}
+
+/* 全局音效开关 */
+.sound-toggle {
+  position: fixed; top: 14px; right: 14px; z-index: 300;
+  width: 38px; height: 38px; border-radius: 50%;
+  display: grid; place-items: center; font-size: 17px;
+  background: rgba(10, 18, 36, 0.85); color: var(--text);
+  border: 1px solid rgba(120, 170, 255, 0.3); cursor: pointer;
+  transition: all 0.15s;
+}
+.sound-toggle:hover { border-color: var(--cyan); box-shadow: 0 0 14px rgba(34, 230, 255, 0.3); }
+.sound-toggle.off { opacity: 0.55; }
+
+/* 手机 / 触屏提示 */
+.touch-hint {
+  position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
+  z-index: 300; max-width: 92vw; text-align: center;
+  background: rgba(10, 18, 36, 0.95); border: 1px solid rgba(255, 176, 32, 0.5);
+  color: #ffd88a; font-size: 13px; line-height: 1.5; border-radius: 12px;
+  padding: 10px 18px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+}
+
 ::-webkit-scrollbar { width: 9px; }
 ::-webkit-scrollbar-thumb { background: rgba(120, 170, 255, 0.25); border-radius: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }

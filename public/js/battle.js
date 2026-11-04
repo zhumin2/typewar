@@ -69,6 +69,7 @@ export class Battle {
       stream: new WordStream(this.seed, { vocab: this.cfg.vocab }),
       onDone: w => this.onWordDone('me', w),
       onEscape: w => this.onWordEscape('me', w),
+      onExplode: w => this.onWordExplode('me', w),
       onLetter: (w, type) => this.onLetter('me', w, type),
     });
     this.lanes.me.setSlowProvider(() => this.S.me.buffs.slowMult && this.t < this.S.me.buffs.slowUntil ? this.S.me.buffs.slowMult : 1);
@@ -79,6 +80,7 @@ export class Battle {
         stream: new WordStream((this.seed ^ 0x9E3779B9) >>> 0, { vocab: this.cfg.vocab }),
         onDone: w => this.onWordDone('foe', w),
         onEscape: w => this.onWordEscape('foe', w),
+        onExplode: w => this.onWordExplode('foe', w),
         onLetter: (w, type) => this.onLetter('foe', w, type),
       });
       this.lanes.foe.setSlowProvider(() => this.S.foe.buffs.slowMult && this.t < this.S.foe.buffs.slowUntil ? this.S.foe.buffs.slowMult : 1);
@@ -171,6 +173,12 @@ export class Battle {
         </section>
       </div>
       <div class="countdown" id="countdown"></div>
+      <div class="pause-layer" id="pause-layer" hidden>
+        <div class="pause-panel">
+          <div class="pause-title">⏸ 已暂停</div>
+          <div class="pause-tip">按 <kbd>Esc</kbd> 继续 · 计时与词流已冻结</div>
+        </div>
+      </div>
       <div class="result-layer" id="result-layer"></div>
     </div>`;
   }
@@ -198,6 +206,17 @@ export class Battle {
     this.ui.fighter = { me: $('fighter-me'), foe: $('fighter-foe') };
     this.ui.fighterHp = { me: $('fhp-me'), foe: $('fhp-foe') };
     this.ui.clash = $('clash');
+    this.ui.pauseLayer = $('pause-layer');
+  }
+
+  /* ============ 暂停 ============ */
+  togglePause(force) {
+    if (this.over || this.phase === 'countdown') return;
+    const next = force === undefined ? !this.paused : force;
+    if (next === this.paused) return;
+    this.paused = next;
+    this.ui.pauseLayer.hidden = !next;
+    if (next) sfx.deny(); else sfx.tick();
   }
 
   /* ============ 舞台角色动画 ============ */
@@ -268,7 +287,7 @@ export class Battle {
         this.phase = 'running';
         this.ui.countdown.textContent = '';
       }
-    } else if (this.phase === 'running') {
+    } else if (this.phase === 'running' && !this.paused) {
       this.t += dt;
       this.lanes.me.update(dt);
       this.lanes.foe.update(dt);
@@ -278,7 +297,7 @@ export class Battle {
       this.netTick(dt);
     }
 
-    updateFX(dt);
+    updateFX(this.paused ? 0 : dt);
     this._uiT -= dt;
     if (this._uiT <= 0) { this._uiT = 0.12; this.refreshUI(); }
     this._raf = requestAnimationFrame(this._frame);
@@ -337,15 +356,54 @@ export class Battle {
       const g = this.gainMult(side);
       s.ap = Math.min(s.maxAp, s.ap + CFG.apPerLetter * g);
       if (side === 'me') {
-        sparkAt(word.el, word.magic ? '#b26bff' : '#4dd8ff');
+        sparkAt(word.el, word.magic ? '#b26bff' : word.gold ? '#ffd166' : word.bomb ? '#ff7a2f' : '#4dd8ff');
         sfx.letter(s.combo);
         this.popCombo();
+      }
+      // 连击里程碑：每累计 N 连击放一道冲击波
+      if (s.combo > 0 && s.combo % CFG.comboMilestone === 0) {
+        this.comboShockwave(side);
       }
     } else {
       s.combo = 0;
       s.stats.wrong++;
       if (side === 'me') sfx.miss();
     }
+  }
+
+  /** 连击里程碑冲击波 */
+  comboShockwave(side) {
+    const s = this.S[side];
+    const foe = side === 'me' ? 'foe' : 'me';
+    if (this.over || s.hp <= 0) return;
+    const dmg = Math.round(6 + s.combo / 10);
+    floatAtEl((this.ui.fighter && this.ui.fighter[side]) || this.ui.portrait[side],
+      `🔥 ${s.combo} 连击冲击`, 'f-buff');
+    this.strikeFoe(side, dmg, '#ffd166', true);
+    sfx.magic();
+  }
+
+  /** 对敌方造成一次"自动"伤害（普攻/冲击波共用，含 PVP 预测与事件） */
+  strikeFoe(side, dmg, color, isWave = false) {
+    const foe = side === 'me' ? 'foe' : 'me';
+    if (this.mode === 'pvp' && side === 'me') {
+      this.netSend({ t: 'evt', data: { kind: 'atk', dmg } });
+      this.S.foe.hp = Math.max(0, this.S.foe.hp - dmg);   // 预测值，快照会校正
+    } else {
+      this.damage(foe, dmg, { src: side });
+    }
+    const from = posOf(this.ui.fighter[side]);
+    const to = posOf(this.ui.fighter[foe]);
+    projectile(from.x, from.y, to.x, to.y, {
+      color, dur: isWave ? 0.3 : 0.34, size: isWave ? 13 : 8,
+      onHit: () => {
+        this.animateFighter(foe, 'hurt', 380);
+        this.clashFlash();
+        const pt = posOf(this.ui.fighter[foe]);
+        burst(pt.x, pt.y, { color, count: isWave ? 34 : 20, speed: isWave ? 340 : 260, size: 3.5, life: 0.5 });
+        floatAtEl(this.ui.fighter[foe], `-${dmg}`, side === 'me' ? 'f-dmg' : 'f-dmg-to-me');
+      },
+    });
   }
 
   onWordDone(side, word) {
@@ -358,6 +416,12 @@ export class Battle {
       const g = this.gainMult(side);
       s.mp = Math.min(s.maxMp, s.mp + CFG.magicWordMp * g);
       if (side === 'me') { sfx.magic(); floatAtEl(word.el, `+${Math.round(CFG.magicWordMp * g)} MP`, 'f-mp'); }
+    } else if (word.gold) {
+      // 金词：直接把行动力顶上去
+      const g = this.gainMult(side);
+      const gain = Math.round(CFG.goldAp * g);
+      s.ap = Math.min(s.maxAp, s.ap + gain);
+      if (side === 'me') { sfx.magic(); floatAtEl(word.el, `+${gain} AP`, 'f-gold'); }
     } else if (side === 'me') sfx.word();
 
     // 普攻伤害
@@ -372,9 +436,21 @@ export class Battle {
       foeState.hp = Math.max(0, foeState.hp - dmg); // 预测值，快照会校正
     } else {
       this.showAttack(side, word, dmg);
+      // 伤害与统计由 damage() 内部统一处理，这里不要再累加
       this.damage(foe, dmg, { src: side });
-      s.stats.dmgDealt += dmg;
     }
+  }
+
+  /** 炸弹词引信烧完：自伤 + 爆裂特效 */
+  onWordExplode(side, word) {
+    if (this.over) return;
+    const target = (this.ui.fighter && this.ui.fighter[side]) || this.ui.portrait[side];
+    const pt = posOf(target);
+    burst(pt.x, pt.y, { color: '#ff7a2f', count: 40, speed: 320, size: 4, life: 0.7 });
+    floatAtEl(target, '💥 爆炸！', 'f-dmg-to-me');
+    if (side === 'me') { shake(1.6); sfx.escape(); }
+    this.damage(side, CFG.bombDamage, { src: null, escape: true });
+    void word;
   }
 
   showAttack(side, word, dmg) {
@@ -491,6 +567,21 @@ export class Battle {
   applySilence(side, dur) {
     const s = this.S[side];
     s.silencedUntil = this.t + dur;
+  }
+
+  /** 净化：清除减益（中毒/减速/沉默） */
+  applyCleanse(side) {
+    const s = this.S[side];
+    const had = s.dots.length > 0 || this.t < s.buffs.slowUntil || this.t < s.silencedUntil;
+    s.dots = [];
+    s.dotAcc = 0;
+    s.buffs.slowUntil = 0;
+    s.buffs.slowMult = 1;
+    s.silencedUntil = 0;
+    if (had) {
+      const target = (this.ui.fighter && this.ui.fighter[side]) || this.ui.portrait[side];
+      floatAtEl(target, '✨ 已净化', 'f-buff');
+    }
   }
 
   applyDot(side, dot, srcSide) {
@@ -633,7 +724,10 @@ export class Battle {
 
   /* ============ 输入 ============ */
   onKey(e) {
-    if (this.over || this.phase !== 'running') return;
+    if (this.over) return;
+    // Esc 暂停/继续（倒计时阶段无效）
+    if (e.key === 'Escape') { e.preventDefault(); this.togglePause(); return; }
+    if (this.phase !== 'running' || this.paused) return;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.key >= '1' && e.key <= '3') {
       e.preventDefault();

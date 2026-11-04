@@ -14,6 +14,17 @@ const state = {
 };
 
 /* ---------------- 音效 ---------------- */
+let mutedPref = false;
+try { mutedPref = localStorage.getItem('typewar.muted') === '1'; } catch { /* 隐私模式忽略 */ }
+state.muted = mutedPref;
+
+/** 音效开关（持久化） */
+export function setMuted(v) {
+  state.muted = !!v;
+  try { localStorage.setItem('typewar.muted', v ? '1' : '0'); } catch { /* ignore */ }
+}
+export function isMuted() { return state.muted; }
+
 function ac() {
   if (!state.audio) {
     const AC = window.AudioContext || window.webkitAudioContext;

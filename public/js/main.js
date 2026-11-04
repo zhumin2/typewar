@@ -6,6 +6,7 @@ import { Battle } from './battle.js';
 import { net } from './net.js';
 import { showMenu, showPveSetup, showJoin, showLobby, showBattleScreen, showResult, showPeerAgain, toast } from './ui.js';
 import { showPractice } from './practice.js';
+import { setMuted, isMuted } from './fx.js';
 
 const screenState = { name: 'menu' };
 
@@ -200,5 +201,31 @@ net.on('_closed', () => {
   backToMenu();
 });
 
+/* ---------------- 全局小部件：音效开关 / 触屏提示 ---------------- */
+function mountGlobalWidgets() {
+  const btn = document.createElement('button');
+  btn.className = 'sound-toggle';
+  btn.title = '音效开关';
+  const sync = () => {
+    const off = isMuted();
+    btn.textContent = off ? '🔇' : '🔊';
+    btn.classList.toggle('off', off);
+    btn.setAttribute('aria-label', off ? '音效已关闭' : '音效已开启');
+  };
+  btn.addEventListener('click', () => { setMuted(!isMuted()); sync(); });
+  sync();
+  document.body.appendChild(btn);
+
+  // 触屏设备给个明确提示（游戏依赖实体键盘）
+  if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) {
+    const hint = document.createElement('div');
+    hint.className = 'touch-hint';
+    hint.textContent = '📱 本游戏需要实体键盘：请使用电脑，或给平板/手机接上蓝牙键盘';
+    document.body.appendChild(hint);
+    setTimeout(() => hint.remove(), 9000);
+  }
+}
+
 /* ---------------- 启动 ---------------- */
+mountGlobalWidgets();
 renderMenu();
